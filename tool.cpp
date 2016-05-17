@@ -37,7 +37,7 @@ public:
 
           Expr *init = vd->getInit();
           if (init) {
-            QualType valType = init->getType();
+            QualType valType = this->getType(init);
             if (!this->isNonNullExpr(init)) {
               if (!this->testTypeNullability(varType, valType)) {
                 std::cout << "Nullability mismatch!! (var decl:" << vd->getNameAsString() << ")";
@@ -63,7 +63,7 @@ public:
           QualType paramQType = d->getType();
 
           Expr *arg = callExpr->getArg(index);
-          QualType argType = arg->getType();
+          QualType argType = this->getType(arg);
 
           if (!this->isNonNullExpr(arg)) {
             if (!this->testTypeNullability(paramQType, argType)) {
@@ -86,7 +86,7 @@ public:
         Expr *rhs = assign->getRHS();
 
         if (!this->isNonNullExpr(rhs)) {
-          if (!this->testTypeNullability(lhs->getType(), rhs->getType())) {
+          if (!this->testTypeNullability(this->getType(lhs), this->getType(rhs))) {
                 std::cout << "Nullability mismatch!! (assignment)";
                 std::cout << std::endl;
                 rhs->getExprLoc().dump(this->Context.getSourceManager());
@@ -97,6 +97,10 @@ public:
     }
 
     return true;
+  }
+
+  QualType getType(const Expr *expr) {
+    return expr->IgnoreParenImpCasts()->getType();
   }
 
   bool testTypeNullability(const QualType &expectedType, const QualType &actualType) {
