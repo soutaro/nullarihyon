@@ -120,4 +120,4 @@ I have tried the tool with some non-trivial sources I'm working on, and found so
 3. `_Nonnull` attribute on global variables looks ignored
 4. Some properties' `nonnull` attribute looks ignored
 
-1. and 2. seems essential. 3. and 4. seems strange to me, and I will have more investigation.
+1 and 2 seem essential. 3 and 4 seem strange to me, and I will have more investigation.
