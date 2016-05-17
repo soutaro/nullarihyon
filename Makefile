@@ -6,10 +6,10 @@ LLVMCONFIG := build/bin/llvm-config
 CXXFLAGS := -I$(shell $(LLVMCONFIG) --src-root)/tools/clang/include -I$(shell $(LLVMCONFIG) --obj-root)/tools/clang/include $(shell $(LLVMCONFIG) --cxxflags) $(RTTIFLAG)
 LLVMLDFLAGS := $(shell $(LLVMCONFIG) --ldflags --libs $(LLVMCOMPONENTS))
 
-SOURCES = tool.cpp
+SOURCES = analyzer.cpp tool.cpp
 
 OBJECTS = $(SOURCES:.cpp=.o)
-EXES = $(OBJECTS:.o=)
+EXE = tool
 CLANGLIBS = \
 				-lclangTooling\
 				-lclangFrontendTool\
@@ -34,10 +34,10 @@ CLANGLIBS = \
 				$(shell $(LLVMCONFIG) --system-libs)\
                 -lcurses
 
-all: $(OBJECTS) $(EXES)
+all: $(EXE)
 
-%: %.o
-	$(CXX) -o $@ $< $(CLANGLIBS) $(LLVMLDFLAGS)
+$(EXE): $(OBJECTS)
+	$(CXX) -o $@ $(OBJECTS) $(CLANGLIBS) $(LLVMLDFLAGS)
 
 clean:
-	-rm -f $(EXES) $(OBJECTS) *~
+	-rm -f $(EXE) $(OBJECTS) *~
