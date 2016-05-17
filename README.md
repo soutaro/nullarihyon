@@ -95,7 +95,23 @@ Nullability mismatch!! (assignment)
 /Users/soutaro/src/nullabilint/objc/SMHello.m:11:13
 ```
 
-# Failurs
+It also prints a lot of warnings and errors like:
+
+```
+...
+/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.11.sdk/System/Library/Frameworks/ApplicationServices.framework/Frameworks/QD.framework/Headers/ColorSyncDeprecated.h:2034:3: warning: 'CMDeviceProfileInfo'
+      is deprecated: first deprecated in OS X 10.6 [-Wdeprecated-declarations]
+  CMDeviceProfileInfo  profiles[1];           /* The profile info records */
+  ^
+/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.11.sdk/System/Library/Frameworks/ApplicationServices.framework/Frameworks/QD.framework/Headers/ColorSyncDeprecated.h:2015:3: note: 'CMDeviceProfileInfo' has
+      been explicitly marked deprecated here
+} CMDeviceProfileInfo DEPRECATED_IN_MAC_OS_X_VERSION_10_6_AND_LATER;
+...
+```
+
+I don't know what is happening...
+
+# Failures
 
 I have tried the tool with some non-trivial sources I'm working on, and found some difficulties.
 
