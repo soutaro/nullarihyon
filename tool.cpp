@@ -100,7 +100,26 @@ public:
   }
 
   QualType getType(const Expr *expr) {
-    return expr->IgnoreParenImpCasts()->getType();
+    const Expr *e = expr->IgnoreParenImpCasts();
+
+    const PseudoObjectExpr *poe = llvm::dyn_cast<PseudoObjectExpr>(e);
+    if (poe) {
+      return this->getType(poe->getSyntacticForm());
+    }
+
+    const ObjCPropertyRefExpr *propRef = llvm::dyn_cast<ObjCPropertyRefExpr>(e);
+    if (propRef) {
+      if (propRef->isImplicitProperty()) {
+        const ObjCMethodDecl *getter = propRef->getImplicitPropertyGetter();
+        return getter->getReturnType();
+      }
+      if (propRef->isExplicitProperty()) {
+        ObjCPropertyDecl *decl = propRef->getExplicitProperty();
+        return decl->getType();
+      }
+    }
+
+    return e->getType();
   }
 
   bool testTypeNullability(const QualType &expectedType, const QualType &actualType) {
