@@ -117,7 +117,6 @@ I have tried the tool with some non-trivial sources I'm working on, and found so
 
 1. `[NSDictionary valueForKey:]` returns `nullable`
 2. `for` loop variables should be `_Nonnull`
-3. `_Nonnull` attribute on global variables looks ignored
-4. Some properties' `nonnull` attribute looks ignored
+3. Some `_Nonnull` attribute on global variables looks ignored
 
-1 and 2 seem essential. 3 and 4 seem strange to me, and I will have more investigation.
+1 and 2 seem essential. 3 seems strange to me, and I will have more investigation.
