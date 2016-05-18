@@ -57,6 +57,7 @@ This tool checks nullability on:
 * Local variable assignment with initial value
 * Local variable assignment
 * Objective-C method call
+* Returning value
 
 If *expected* type has `_Nonnull` attribute, and *actual* type does not have, the tool reports an error like:
 
