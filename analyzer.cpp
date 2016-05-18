@@ -2,6 +2,7 @@
 #include <iostream>
 
 #include <clang/AST/ASTConsumer.h>
+#include <clang/AST/StmtVisitor.h>
 #include <clang/AST/RecursiveASTVisitor.h>
 
 #include "analyzer.h"
@@ -9,11 +10,9 @@
 using namespace llvm;
 using namespace clang;
 
-class NullCheckVisitor : public RecursiveASTVisitor<NullCheckVisitor> {
+class MethodBodyChecker : public RecursiveASTVisitor<MethodBodyChecker> {
 public:
-  ASTContext &Context;
-
-  NullCheckVisitor(ASTContext &Context) : Context(Context) {
+  MethodBodyChecker(ASTContext &Context, QualType &returnType) : Context(Context), ReturnType(returnType) {
 
   }
 
@@ -88,6 +87,22 @@ public:
       }
     }
 
+    ReturnStmt *retStmt = llvm::dyn_cast<ReturnStmt>(stmt);
+    if (retStmt) {
+      Expr *value = retStmt->getRetValue();
+      if (!this->isNonNullExpr(value)) {
+        if (value) {
+          QualType type = this->getType(value);
+          if (!this->testTypeNullability(ReturnType, type)) {
+            std::cout << "Nullability mismatch!! (return)";
+            std::cout << std::endl;
+            value->getExprLoc().dump(this->Context.getSourceManager());
+            std::cout << std::endl;
+          }
+        }
+      }
+    }
+
     return true;
   }
 
@@ -146,6 +161,31 @@ public:
       return Optional<NullabilityKind>::create(NULL);
     }
   }
+
+private:
+  ASTContext &Context;
+  QualType &ReturnType;
+};
+
+class NullCheckVisitor : public RecursiveASTVisitor<NullCheckVisitor> {
+public:
+  NullCheckVisitor(ASTContext &context) : Context(context) {}
+
+  bool VisitDecl(Decl *decl) {
+    ObjCMethodDecl *methodDecl = llvm::dyn_cast<ObjCMethodDecl>(decl);
+    if (methodDecl) {
+      if (methodDecl->hasBody()) {
+        QualType returnType = methodDecl->getReturnType();
+
+        MethodBodyChecker checker(Context, returnType);
+        checker.TraverseStmt(methodDecl->getBody());
+      }
+    }
+    return true;
+  }
+
+private:
+  ASTContext &Context;
 };
 
 class NullCheckConsumer : public clang::ASTConsumer {
