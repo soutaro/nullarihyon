@@ -6,13 +6,15 @@
 #include <clang/AST/RecursiveASTVisitor.h>
 
 #include "analyzer.h"
+#include "ErrorMessage.h"
 
 using namespace llvm;
 using namespace clang;
 
 class MethodBodyChecker : public RecursiveASTVisitor<MethodBodyChecker> {
 public:
-  MethodBodyChecker(ASTContext &Context, QualType &returnType) : Context(Context), ReturnType(returnType) {
+  MethodBodyChecker(ASTContext &Context, std::vector<ErrorMessage> &errors, QualType &returnType)
+    : Context(Context), Errors(errors), ReturnType(returnType) {
 
   }
 
@@ -31,10 +33,10 @@ public:
             QualType valType = this->getType(init);
             if (!this->isNonNullExpr(init)) {
               if (!this->testTypeNullability(varType, valType)) {
-                std::cout << "Nullability mismatch!! (var decl:" << vd->getNameAsString() << ")";
-                std::cout << std::endl;
-                vd->getLocation().dump(vd->getASTContext().getSourceManager());
-                std::cout << std::endl;
+                std::string loc = vd->getLocation().printToString(Context.getSourceManager());
+                std::ostringstream s;
+                s << "var decl (" << vd->getNameAsString() << ")";
+                Errors.push_back(ErrorMessage(loc, s));
               }
             }
           }
@@ -58,10 +60,10 @@ public:
 
           if (!this->isNonNullExpr(arg)) {
             if (!this->testTypeNullability(paramQType, argType)) {
-                std::cout << "Nullability mismatch!! (method call: " << decl->getNameAsString() << ")";
-                std::cout << std::endl;
-                arg->getExprLoc().dump(this->Context.getSourceManager());
-                std::cout << std::endl;
+              std::string loc = arg->getExprLoc().printToString(Context.getSourceManager());
+              std::ostringstream s;
+              s << "method call (" << decl->getNameAsString() << ", " << index << ")";
+              Errors.push_back(ErrorMessage(loc, s));
             }
           }
 
@@ -78,10 +80,10 @@ public:
 
         if (!this->isNonNullExpr(rhs)) {
           if (!this->testTypeNullability(this->getType(lhs), this->getType(rhs))) {
-                std::cout << "Nullability mismatch!! (assignment)";
-                std::cout << std::endl;
-                rhs->getExprLoc().dump(this->Context.getSourceManager());
-                std::cout << std::endl;
+            std::string loc = rhs->getExprLoc().printToString(Context.getSourceManager());
+            std::ostringstream s;
+            s << "assignment";
+            Errors.push_back(ErrorMessage(loc, s));
           }
         }
       }
@@ -94,10 +96,10 @@ public:
         if (value) {
           QualType type = this->getType(value);
           if (!this->testTypeNullability(ReturnType, type)) {
-            std::cout << "Nullability mismatch!! (return)";
-            std::cout << std::endl;
-            value->getExprLoc().dump(this->Context.getSourceManager());
-            std::cout << std::endl;
+            std::string loc = value->getExprLoc().printToString(Context.getSourceManager());
+            std::ostringstream s;
+            s << "return";
+            Errors.push_back(ErrorMessage(loc, s));
           }
         }
       }
@@ -134,8 +136,6 @@ public:
     Optional<NullabilityKind> actualKind = this->nullability(actualType);
     if (expectedKind.getValueOr(NullabilityKind::Unspecified) == NullabilityKind::NonNull) {
       if (actualKind.getValueOr(NullabilityKind::Unspecified) != NullabilityKind::NonNull) {
-        expectedType->dump();
-        actualType->dump();
         return false;
       }
     }
@@ -171,12 +171,13 @@ public:
 
 private:
   ASTContext &Context;
+  std::vector<ErrorMessage> &Errors;
   QualType &ReturnType;
 };
 
 class NullCheckVisitor : public RecursiveASTVisitor<NullCheckVisitor> {
 public:
-  NullCheckVisitor(ASTContext &context) : Context(context) {}
+  NullCheckVisitor(ASTContext &context, std::vector<ErrorMessage> &errors) : Context(context), Errors(errors) {}
 
   bool VisitDecl(Decl *decl) {
     ObjCMethodDecl *methodDecl = llvm::dyn_cast<ObjCMethodDecl>(decl);
@@ -184,7 +185,7 @@ public:
       if (methodDecl->hasBody()) {
         QualType returnType = methodDecl->getReturnType();
 
-        MethodBodyChecker checker(Context, returnType);
+        MethodBodyChecker checker(Context, Errors, returnType);
         checker.TraverseStmt(methodDecl->getBody());
       }
     }
@@ -193,17 +194,27 @@ public:
 
 private:
   ASTContext &Context;
+  std::vector<ErrorMessage> &Errors;
 };
 
-class NullCheckConsumer : public clang::ASTConsumer {
+class NullCheckConsumer : public ASTConsumer {
 public:
   virtual void HandleTranslationUnit(clang::ASTContext &Context) {
-    NullCheckVisitor visitor(Context);
+    std::vector<ErrorMessage> errors;
+
+    NullCheckVisitor visitor(Context, errors);
     visitor.TraverseDecl(Context.getTranslationUnitDecl());
+
+    std::vector<ErrorMessage>::iterator it;
+    for (it = errors.begin(); it != errors.end(); it++) {
+      std::cout << it->getLocation() << " " << it->getMessage() << std::endl;
+    }    
   }
 };
 
 std::unique_ptr<clang::ASTConsumer> NullCheckAction::CreateASTConsumer(CompilerInstance &Compiler, StringRef InFile) {
   return std::unique_ptr<ASTConsumer>(new NullCheckConsumer);
 }
+
+
 

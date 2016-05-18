@@ -6,7 +6,7 @@ LLVMCONFIG := build/bin/llvm-config
 CXXFLAGS := -I$(shell $(LLVMCONFIG) --src-root)/tools/clang/include -I$(shell $(LLVMCONFIG) --obj-root)/tools/clang/include $(shell $(LLVMCONFIG) --cxxflags) $(RTTIFLAG)
 LLVMLDFLAGS := $(shell $(LLVMCONFIG) --ldflags --libs $(LLVMCOMPONENTS))
 
-SOURCES = analyzer.cpp tool.cpp
+SOURCES = analyzer.cpp tool.cpp ErrorMessage.cpp
 
 OBJECTS = $(SOURCES:.cpp=.o)
 EXE = tool
