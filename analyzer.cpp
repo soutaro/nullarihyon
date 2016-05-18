@@ -150,6 +150,12 @@ public:
     if (llvm::dyn_cast<ObjCArrayLiteral>(e)) return true;
     if (llvm::dyn_cast<ObjCDictionaryLiteral>(e)) return true;
     if (llvm::dyn_cast<ObjCSelectorExpr>(e)) return true;
+    if (llvm::dyn_cast<DeclRefExpr>(e)) {
+      DeclRefExpr *ref = llvm::dyn_cast<DeclRefExpr>(e);
+      if (ref) {
+        return ref->getNameInfo().getAsString() == "self";
+      }
+    }
 
     return false;
   }
