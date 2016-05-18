@@ -27,23 +27,32 @@ options = (config[:commandline_options] || []) + additional_options
 
 for arg in ARGV
   command_line = [$Executable, arg, "--"] + options
+  puts command_line.join(" ")
 
-  stdout, stderr, status = Open3.capture3(*command_line)
+  status = Open3.popen3 *command_line do |stdin, stdout, stderr, thread|
+    stdin.close
 
-  if $Verbose || !status.success?
-    puts command_line.join(" ")
+    out = Thread.new do
+      while line = stdout.gets
+        STDOUT.print line
+      end
+    end
+
+    err = Thread.new do
+      while line = stderr.gets
+        STDERR.print line if $Verbose
+      end
+    end
+
+    thread.join()
+    out.join
+    err.join
+
+    thread.value
   end
 
   unless status.success?
     STDERR.puts "Failed to execute analyzer..."
-    STDERR.puts stderr
-    exit 1
-  else
-    if $Verbose
-      STDERR.puts stderr
-    end
-
-    STDOUT.puts stdout
   end
 end
 
