@@ -149,6 +149,7 @@ public:
     if (llvm::dyn_cast<ObjCBoxedExpr>(e)) return true;
     if (llvm::dyn_cast<ObjCArrayLiteral>(e)) return true;
     if (llvm::dyn_cast<ObjCDictionaryLiteral>(e)) return true;
+    if (llvm::dyn_cast<ObjCSelectorExpr>(e)) return true;
 
     return false;
   }
