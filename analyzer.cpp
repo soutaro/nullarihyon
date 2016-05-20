@@ -12,6 +12,188 @@
 using namespace llvm;
 using namespace clang;
 
+class ExprNullabilityCalculator : public StmtVisitor<ExprNullabilityCalculator, NullabilityKind> {
+public:
+  ExprNullabilityCalculator(ASTContext &context) : Context(context) {
+
+  }
+
+  NullabilityKind VisitExpr(Expr *expr) {
+    if (llvm::dyn_cast<ObjCStringLiteral>(expr)) return NullabilityKind::NonNull;
+    if (llvm::dyn_cast<ObjCBoxedExpr>(expr)) return NullabilityKind::NonNull;
+    if (llvm::dyn_cast<ObjCArrayLiteral>(expr)) return NullabilityKind::NonNull;
+    if (llvm::dyn_cast<ObjCDictionaryLiteral>(expr)) return NullabilityKind::NonNull;
+    if (llvm::dyn_cast<ObjCSelectorExpr>(expr)) return NullabilityKind::NonNull;
+    if (llvm::dyn_cast<IntegerLiteral>(expr)) return NullabilityKind::NonNull;
+    if (llvm::dyn_cast<StringLiteral>(expr)) return NullabilityKind::NonNull;
+    if (llvm::dyn_cast<ObjCBoolLiteralExpr>(expr)) return NullabilityKind::NonNull;
+    if (llvm::dyn_cast<UnaryOperator>(expr)) return NullabilityKind::NonNull;
+
+    const Type *type = expr->getType().getTypePtrOrNull();
+    if (type && type->isObjectType()) {
+      std::cerr << "VisitExpr; unknown expr" << std::endl;
+      expr->dump();
+      return type->getNullability(Context).getValueOr(NullabilityKind::Unspecified);
+    } else {
+      return NullabilityKind::NonNull;
+    }
+  }
+
+  NullabilityKind VisitDeclRefExpr(DeclRefExpr *refExpr) {
+    std::string name = refExpr->getNameInfo().getAsString();
+    if (name == "self" || name == "super") {
+      // Assume self is nonnull
+      return NullabilityKind::NonNull;
+    } else {
+      ValueDecl *decl = refExpr->getDecl();
+      if (decl) {
+        return getNullability(decl->getType());
+      } else {
+        return UnexpectedUnspecified(refExpr);
+      }
+    }
+  }
+
+  NullabilityKind VisitObjCIvarRefExpr(ObjCIvarRefExpr *expr) {
+    return getNullability(expr->getType());
+  }
+
+  NullabilityKind VisitObjCPropertyRefExpr(ObjCPropertyRefExpr *expr) {
+    // FIXME: Ignore receivers nullability
+
+    if (expr->isImplicitProperty()) {
+      const ObjCMethodDecl *getter = expr->getImplicitPropertyGetter();
+      return getNullability(getter->getReturnType());
+    }
+    if (expr->isExplicitProperty()) {
+      ObjCPropertyDecl *decl = expr->getExplicitProperty();
+      return getNullability(decl->getType());
+    }
+
+    return UnexpectedUnspecified(expr);
+  }
+
+  NullabilityKind VisitPseudoObjectExpr(PseudoObjectExpr *expr) {
+    Expr *result = expr->getResultExpr();
+    if (result) {
+      result = result->IgnoreParenImpCasts();
+      return Visit(result);
+    } else {
+      return UnexpectedUnspecified(expr);
+    }
+  }
+
+  NullabilityKind VisitOpaqueValueExpr(OpaqueValueExpr *expr) {
+    return Visit(expr->getSourceExpr()->IgnoreParenImpCasts());
+  }
+
+  NullabilityKind VisitExprWithCleanups(ExprWithCleanups *expr) {
+    return Visit(expr->getSubExpr()->IgnoreParenImpCasts());
+  }
+
+  NullabilityKind VisitPredefinedExpr(PredefinedExpr *expr) {
+    return NullabilityKind::NonNull;
+  }
+
+  NullabilityKind VisitObjCMessageExpr(ObjCMessageExpr *expr) {
+    ObjCMessageExpr::ReceiverKind receiverKind = expr->getReceiverKind();
+
+    if (receiverKind == ObjCMessageExpr::ReceiverKind::Instance) {
+      Expr *receiver = expr->getInstanceReceiver();
+      NullabilityKind receiverNullability = Visit(receiver->IgnoreParenImpCasts());
+      if (receiverNullability != NullabilityKind::NonNull) {
+        return NullabilityKind::Nullable;
+      }
+    }
+
+    ObjCMethodDecl *decl = expr->getMethodDecl();
+    if (decl) {
+      return getNullability(decl->getReturnType());
+    } else {
+      return NullabilityKind::Unspecified;
+    }
+  }
+
+  NullabilityKind VisitCallExpr(CallExpr *expr) {
+    return getNullability(expr->getType());
+  }
+
+  NullabilityKind VisitObjCSubscriptRefExpr(ObjCSubscriptRefExpr *expr) {
+    Expr *receiver = expr->getBaseExpr();
+    NullabilityKind receiverKind = Visit(receiver->IgnoreParenImpCasts());
+    if (receiverKind != NullabilityKind::NonNull) {
+      return NullabilityKind::Nullable;
+    }
+
+    ObjCMethodDecl *decl = expr->getAtIndexMethodDecl();
+    if (decl) {
+      return getNullability(decl->getReturnType());
+    } else {
+      return UnexpectedUnspecified(expr);
+    }
+  }
+
+  NullabilityKind VisitMemberExpr(MemberExpr *expr) {
+    return Visit(expr->getBase()->IgnoreParenImpCasts());
+  }
+
+  NullabilityKind VisitBinAssign(BinaryOperator *expr) {
+    Expr *rhs = expr->getRHS();
+    return Visit(rhs->IgnoreParenImpCasts());
+  }
+
+  NullabilityKind VisitBinaryOperator(BinaryOperator *expr) {
+    return NullabilityKind::NonNull;
+  }
+
+  NullabilityKind VisitBinaryConditionalOperator(BinaryConditionalOperator *expr) {
+    return Visit(expr->getFalseExpr()->IgnoreParenImpCasts());
+  }
+
+  NullabilityKind VisitConditionalOperator(ConditionalOperator *expr) {
+    NullabilityKind trueKind = Visit(expr->getTrueExpr()->IgnoreParenImpCasts());
+    NullabilityKind falseKind = Visit(expr->getFalseExpr()->IgnoreParenImpCasts());
+
+    if (trueKind == NullabilityKind::NonNull && falseKind == NullabilityKind::NonNull) {
+      return NullabilityKind::NonNull;
+    } else {
+      return NullabilityKind::Nullable;
+    }
+  }
+
+  NullabilityKind VisitBlockExpr(BlockExpr *expr) {
+    return getNullability(expr->getType());
+  }
+
+  NullabilityKind VisitStmtExpr(StmtExpr *expr) {
+    return getNullability(expr->getType());
+  }
+
+  NullabilityKind VisitCastExpr(CastExpr *expr) {
+    return getNullability(expr->getType());
+  }
+
+  NullabilityKind getNullability(const QualType &qualType) {
+    const Type *type = qualType.getTypePtrOrNull();
+    if (type) {
+      return type->getNullability(Context).getValueOr(NullabilityKind::Unspecified);
+    } else {
+      std::cerr << "GetNullability" << std::endl;
+      qualType.dump();
+      return NullabilityKind::Unspecified;
+    }
+  }
+
+  NullabilityKind UnexpectedUnspecified(Expr *expr) {
+    std::cerr << "Unexpected unspecified:" << std::endl;
+    expr->dump();
+    return NullabilityKind::Unspecified;
+  }
+
+private:
+  ASTContext &Context;
+};
+
 class MethodBodyChecker : public RecursiveASTVisitor<MethodBodyChecker> {
 public:
   MethodBodyChecker(ASTContext &Context, std::vector<ErrorMessage> &errors, QualType returnType)
@@ -103,6 +285,28 @@ public:
       }
     }
 
+    return true;
+  }
+
+  bool VisitExpr(Expr *expr) {
+    ExprNullabilityCalculator calculator = ExprNullabilityCalculator(Context);
+    NullabilityKind kind = calculator.Visit(expr->IgnoreParenImpCasts());
+
+    std::string s = "unknown";
+    switch (kind) {
+      case NullabilityKind::Unspecified:
+        s = "Unspecified";
+        break;
+      case NullabilityKind::NonNull:
+        s = "NonNull";
+        break;
+      case NullabilityKind::Nullable:
+        s = "Nullable";
+        break;
+    }
+
+    std::string loc = expr->getExprLoc().printToString(Context.getSourceManager());
+    // std::cerr << "VisitExpr nullability = " << s << " (" << loc << ")" << std::endl;
     return true;
   }
 
