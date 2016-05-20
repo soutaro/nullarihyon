@@ -92,8 +92,8 @@ public:
     ReturnStmt *retStmt = llvm::dyn_cast<ReturnStmt>(stmt);
     if (retStmt) {
       Expr *value = retStmt->getRetValue();
-      if (!this->isNonNullExpr(value)) {
-        if (value) {
+      if (value) {
+        if (!this->isNonNullExpr(value)) {
           QualType type = this->getType(value);
           if (!this->testTypeNullability(ReturnType, type)) {
             std::string loc = value->getExprLoc().printToString(Context.getSourceManager());
