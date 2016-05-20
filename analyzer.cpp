@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <iostream>
+#include <stack>
 
 #include <clang/AST/ASTConsumer.h>
 #include <clang/AST/StmtVisitor.h>
@@ -13,9 +14,8 @@ using namespace clang;
 
 class MethodBodyChecker : public RecursiveASTVisitor<MethodBodyChecker> {
 public:
-  MethodBodyChecker(ASTContext &Context, std::vector<ErrorMessage> &errors, QualType &returnType)
+  MethodBodyChecker(ASTContext &Context, std::vector<ErrorMessage> &errors, QualType returnType)
     : Context(Context), Errors(errors), ReturnType(returnType) {
-
   }
 
   bool VisitStmt(Stmt *stmt) {
@@ -108,6 +108,21 @@ public:
     return true;
   }
 
+  bool TraverseBlockExpr(BlockExpr *blockExpr) {
+    const Type *type = blockExpr->getType().getTypePtr();
+    const BlockPointerType *blockType = llvm::dyn_cast<BlockPointerType>(type);
+    if (blockType) {
+      const FunctionProtoType *funcType = llvm::dyn_cast<FunctionProtoType>(blockType->getPointeeType().getTypePtr());
+      if (funcType) {
+        QualType retType = funcType->getReturnType();
+        MethodBodyChecker checker(Context, Errors, retType);
+        checker.TraverseStmt(blockExpr->getBody());
+      }
+    }
+
+    return true;
+  }
+
   QualType getType(const Expr *expr) {
     const Expr *e = expr->IgnoreParenImpCasts();
 
@@ -172,7 +187,7 @@ public:
 private:
   ASTContext &Context;
   std::vector<ErrorMessage> &Errors;
-  QualType &ReturnType;
+  QualType ReturnType;
 };
 
 class NullCheckVisitor : public RecursiveASTVisitor<NullCheckVisitor> {
