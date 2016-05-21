@@ -254,7 +254,10 @@ public:
     Expr *lhs = assign->getLHS();
     Expr *rhs = assign->getRHS();
 
-    if (!isNullabilityCompatible(lhs->getType(), calculateNullability(rhs))) {
+    NullabilityKind lhsNullability = calculateNullability(lhs);
+    NullabilityKind rhsNullability = calculateNullability(rhs);
+
+    if (!isNullabilityCompatible(lhsNullability, rhsNullability)) {
       std::string loc = rhs->getExprLoc().printToString(Context.getSourceManager());
       std::ostringstream s;
       s << "assignment";
