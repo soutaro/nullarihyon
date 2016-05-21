@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <iostream>
 #include <stack>
+#include <unordered_map>
 
 #include <clang/AST/ASTConsumer.h>
 #include <clang/AST/StmtVisitor.h>
@@ -12,9 +13,66 @@
 using namespace llvm;
 using namespace clang;
 
+typedef std::unordered_map<VarDecl *, NullabilityKind> NullabilityKindEnvironment;
+
+class VariableNullabilityInference: public RecursiveASTVisitor<VariableNullabilityInference> {
+public:
+  VariableNullabilityInference(ASTContext &context, NullabilityKindEnvironment &env)
+    : Context(context), Env(env) {
+  }
+
+  bool VisitDeclStmt(DeclStmt *decl) {
+    DeclGroupRef group = decl->getDeclGroup();
+    DeclGroupRef::iterator it;
+    for(it = group.begin(); it != group.end(); it++) {
+      VarDecl *vd = llvm::dyn_cast<VarDecl>(*it);
+      if (vd) {
+        QualType varType = vd->getType();
+        const Type *type = varType.getTypePtrOrNull();
+
+        if (type) {
+          if (Env.find(vd) == Env.end()) {
+            Optional<NullabilityKind> kind = type->getNullability(Context);
+            Env[vd] = kind.getValueOr(NullabilityKind::Unspecified);
+          }
+        }
+      }
+    }    
+
+    return true;
+  }
+
+  bool VisitObjCForCollectionStmt(ObjCForCollectionStmt *stmt) {
+    DeclStmt *decl = llvm::dyn_cast<DeclStmt>(stmt->getElement());
+    if (decl) {
+      DeclGroupRef group = decl->getDeclGroup();
+      DeclGroupRef::iterator it;
+      for(it = group.begin(); it != group.end(); it++) {
+        VarDecl *vd = llvm::dyn_cast<VarDecl>(*it);
+        if (vd) {
+          QualType varType = vd->getType();
+          const Type *type = varType.getTypePtrOrNull();
+
+          if (type) {
+            Optional<NullabilityKind> kind = type->getNullability(Context);
+            if (!kind.hasValue()) {
+              Env[vd] = NullabilityKind::NonNull;
+            }
+          }
+        }
+      }    
+    }
+    return true;
+  }
+
+private:
+  ASTContext &Context;
+  NullabilityKindEnvironment &Env;
+};
+
 class ExprNullabilityCalculator : public StmtVisitor<ExprNullabilityCalculator, NullabilityKind> {
 public:
-  ExprNullabilityCalculator(ASTContext &context) : Context(context) {
+  ExprNullabilityCalculator(ASTContext &context, NullabilityKindEnvironment &env) : Context(context), Env(env) {
 
   }
 
@@ -47,7 +105,12 @@ public:
     } else {
       ValueDecl *decl = refExpr->getDecl();
       if (decl) {
-        return getNullability(decl->getType());
+        VarDecl *varDecl = llvm::dyn_cast<VarDecl>(decl);
+        if (varDecl && Env.find(varDecl) != Env.end()) {
+          return Env.at(varDecl);
+        } else {
+          return getNullability(decl->getType());
+        }
       } else {
         return UnexpectedUnspecified(refExpr);
       }
@@ -173,6 +236,15 @@ public:
     return getNullability(expr->getType());
   }
 
+  NullabilityKind VisitVarDecl(VarDecl *varDecl) {
+    NullabilityKindEnvironment::iterator it = Env.find(varDecl);
+    if (it != Env.end()) {
+      return it->second;
+    } else {
+      return NullabilityKind::Unspecified;
+    }
+  }
+
   NullabilityKind getNullability(const QualType &qualType) {
     const Type *type = qualType.getTypePtrOrNull();
     if (type) {
@@ -192,6 +264,7 @@ public:
 
 private:
   ASTContext &Context;
+  NullabilityKindEnvironment &Env;
 };
 
 class MethodBodyChecker : public RecursiveASTVisitor<MethodBodyChecker> {
@@ -206,11 +279,11 @@ public:
     for(it = group.begin(); it != group.end(); it++) {
       VarDecl *vd = llvm::dyn_cast<VarDecl>(*it);
       if (vd) {
-        QualType varType = vd->getType();
+        NullabilityKind varKind = NullabilityCalculator.VisitVarDecl(vd);
 
         Expr *init = vd->getInit();
         if (init) {
-          if (!isNullabilityCompatible(varType, calculateNullability(init))) {
+          if (!isNullabilityCompatible(varKind, calculateNullability(init))) {
             std::string loc = vd->getLocation().printToString(Context.getSourceManager());
             std::ostringstream s;
             s << "var decl (" << vd->getNameAsString() << ")";
@@ -335,8 +408,33 @@ public:
     ObjCMethodDecl *methodDecl = llvm::dyn_cast<ObjCMethodDecl>(decl);
     if (methodDecl) {
       if (methodDecl->hasBody()) {
+        NullabilityKindEnvironment env;
+        VariableNullabilityInference varInference(Context, env);
+        varInference.TraverseStmt(methodDecl->getBody());
+
+        // NullabilityKindEnvironment::iterator it;
+        // for (it = env.begin(); it != env.end(); it++) {
+        //   VarDecl *decl = it->first;
+        //   NullabilityKind kind = it->second;
+
+        //   std::string x = "";
+        //   switch (kind) {
+        //     case NullabilityKind::Unspecified:
+        //       x = "unspecified";
+        //       break;
+        //     case NullabilityKind::NonNull:
+        //       x = "nonnull";
+        //       break;
+        //     case NullabilityKind::Nullable:
+        //       x = "nullable";
+        //       break;
+        //   }
+
+        //   std::cerr << decl->getNameAsString() << ": " << x << std::endl;
+        // }
+
         QualType returnType = methodDecl->getReturnType();
-        ExprNullabilityCalculator calculator(Context);
+        ExprNullabilityCalculator calculator(Context, env);
 
         MethodBodyChecker checker(Context, Errors, returnType, calculator);
         checker.TraverseStmt(methodDecl->getBody());
