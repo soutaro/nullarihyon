@@ -296,17 +296,19 @@ public:
   }
 
   bool VisitBinAssign(BinaryOperator *assign) {
-    Expr *lhs = assign->getLHS();
+    DeclRefExpr *lhs = llvm::dyn_cast<DeclRefExpr>(assign->getLHS());
     Expr *rhs = assign->getRHS();
 
-    NullabilityKind lhsNullability = calculateNullability(lhs);
-    NullabilityKind rhsNullability = calculateNullability(rhs);
+    if (lhs) {
+      NullabilityKind lhsNullability = calculateNullability(lhs);
+      NullabilityKind rhsNullability = calculateNullability(rhs);
 
-    if (!isNullabilityCompatible(lhsNullability, rhsNullability)) {
-      std::string loc = rhs->getExprLoc().printToString(Context.getSourceManager());
-      std::ostringstream s;
-      s << "assignment";
-      Errors.push_back(ErrorMessage(loc, s));
+      if (!isNullabilityCompatible(lhsNullability, rhsNullability)) {
+        std::string loc = rhs->getExprLoc().printToString(Context.getSourceManager());
+        std::ostringstream s;
+        s << "assignment";
+        Errors.push_back(ErrorMessage(loc, s));
+      }      
     }
 
     return true;
