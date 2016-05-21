@@ -196,8 +196,8 @@ private:
 
 class MethodBodyChecker : public RecursiveASTVisitor<MethodBodyChecker> {
 public:
-  MethodBodyChecker(ASTContext &Context, std::vector<ErrorMessage> &errors, QualType returnType)
-    : Context(Context), Errors(errors), ReturnType(returnType) {
+  MethodBodyChecker(ASTContext &Context, std::vector<ErrorMessage> &errors, QualType returnType, ExprNullabilityCalculator &Calculator)
+    : Context(Context), Errors(errors), ReturnType(returnType), NullabilityCalculator(Calculator) {
   }
 
   bool VisitDeclStmt(DeclStmt *decl) {
@@ -210,14 +210,11 @@ public:
 
         Expr *init = vd->getInit();
         if (init) {
-          QualType valType = this->getType(init);
-          if (!this->isNonNullExpr(init)) {
-            if (!this->testTypeNullability(varType, valType)) {
-              std::string loc = vd->getLocation().printToString(Context.getSourceManager());
-              std::ostringstream s;
-              s << "var decl (" << vd->getNameAsString() << ")";
-              Errors.push_back(ErrorMessage(loc, s));
-            }
+          if (!isNullabilityCompatible(varType, calculateNullability(init))) {
+            std::string loc = vd->getLocation().printToString(Context.getSourceManager());
+            std::ostringstream s;
+            s << "var decl (" << vd->getNameAsString() << ")";
+            Errors.push_back(ErrorMessage(loc, s));
           }
         }
       }
@@ -237,15 +234,13 @@ public:
         QualType paramQType = d->getType();
 
         Expr *arg = callExpr->getArg(index);
-        QualType argType = this->getType(arg);
+        NullabilityKind argNullability = calculateNullability(arg);
 
-        if (!this->isNonNullExpr(arg)) {
-          if (!this->testTypeNullability(paramQType, argType)) {
-            std::string loc = arg->getExprLoc().printToString(Context.getSourceManager());
-            std::ostringstream s;
-            s << "method call (" << decl->getNameAsString() << ", " << index << ")";
-            Errors.push_back(ErrorMessage(loc, s));
-          }
+        if (!isNullabilityCompatible(paramQType, argNullability)) {
+          std::string loc = arg->getExprLoc().printToString(Context.getSourceManager());
+          std::ostringstream s;
+          s << "method call (" << decl->getNameAsString() << ", " << index << ")";
+          Errors.push_back(ErrorMessage(loc, s));
         }
 
         index++;
@@ -259,13 +254,11 @@ public:
     Expr *lhs = assign->getLHS();
     Expr *rhs = assign->getRHS();
 
-    if (!this->isNonNullExpr(rhs)) {
-      if (!this->testTypeNullability(this->getType(lhs), this->getType(rhs))) {
-        std::string loc = rhs->getExprLoc().printToString(Context.getSourceManager());
-        std::ostringstream s;
-        s << "assignment";
-        Errors.push_back(ErrorMessage(loc, s));
-      }
+    if (!isNullabilityCompatible(lhs->getType(), calculateNullability(rhs))) {
+      std::string loc = rhs->getExprLoc().printToString(Context.getSourceManager());
+      std::ostringstream s;
+      s << "assignment";
+      Errors.push_back(ErrorMessage(loc, s));
     }
 
     return true;
@@ -274,39 +267,14 @@ public:
   bool VisitReturnStmt(ReturnStmt *retStmt) {
     Expr *value = retStmt->getRetValue();
     if (value) {
-      if (!this->isNonNullExpr(value)) {
-        QualType type = this->getType(value);
-        if (!this->testTypeNullability(ReturnType, type)) {
-          std::string loc = value->getExprLoc().printToString(Context.getSourceManager());
-          std::ostringstream s;
-          s << "return";
-          Errors.push_back(ErrorMessage(loc, s));
-        }
+      if (!isNullabilityCompatible(ReturnType, calculateNullability(value))) {
+        std::string loc = value->getExprLoc().printToString(Context.getSourceManager());
+        std::ostringstream s;
+        s << "return";
+        Errors.push_back(ErrorMessage(loc, s));
       }
     }
 
-    return true;
-  }
-
-  bool VisitExpr(Expr *expr) {
-    ExprNullabilityCalculator calculator = ExprNullabilityCalculator(Context);
-    NullabilityKind kind = calculator.Visit(expr->IgnoreParenImpCasts());
-
-    std::string s = "unknown";
-    switch (kind) {
-      case NullabilityKind::Unspecified:
-        s = "Unspecified";
-        break;
-      case NullabilityKind::NonNull:
-        s = "NonNull";
-        break;
-      case NullabilityKind::Nullable:
-        s = "Nullable";
-        break;
-    }
-
-    std::string loc = expr->getExprLoc().printToString(Context.getSourceManager());
-    // std::cerr << "VisitExpr nullability = " << s << " (" << loc << ")" << std::endl;
     return true;
   }
 
@@ -317,7 +285,7 @@ public:
       const FunctionProtoType *funcType = llvm::dyn_cast<FunctionProtoType>(blockType->getPointeeType().getTypePtr());
       if (funcType) {
         QualType retType = funcType->getReturnType();
-        MethodBodyChecker checker(Context, Errors, retType);
+        MethodBodyChecker checker(Context, Errors, retType, NullabilityCalculator);
         checker.TraverseStmt(blockExpr->getBody());
       }
     }
@@ -325,34 +293,13 @@ public:
     return true;
   }
 
-  QualType getType(const Expr *expr) {
-    const Expr *e = expr->IgnoreParenImpCasts();
-
-    const PseudoObjectExpr *poe = llvm::dyn_cast<PseudoObjectExpr>(e);
-    if (poe) {
-      return this->getType(poe->getSyntacticForm());
-    }
-
-    const ObjCPropertyRefExpr *propRef = llvm::dyn_cast<ObjCPropertyRefExpr>(e);
-    if (propRef) {
-      if (propRef->isImplicitProperty()) {
-        const ObjCMethodDecl *getter = propRef->getImplicitPropertyGetter();
-        return getter->getReturnType();
-      }
-      if (propRef->isExplicitProperty()) {
-        ObjCPropertyDecl *decl = propRef->getExplicitProperty();
-        return decl->getType();
-      }
-    }
-
-    return e->getType();
+  NullabilityKind calculateNullability(Expr *expr) {
+    return NullabilityCalculator.Visit(expr->IgnoreParenImpCasts());
   }
 
-  bool testTypeNullability(const QualType &expectedType, const QualType &actualType) {
-    Optional<NullabilityKind> expectedKind = this->nullability(expectedType);
-    Optional<NullabilityKind> actualKind = this->nullability(actualType);
-    if (expectedKind.getValueOr(NullabilityKind::Unspecified) == NullabilityKind::NonNull) {
-      if (actualKind.getValueOr(NullabilityKind::Unspecified) != NullabilityKind::NonNull) {
+  bool isNullabilityCompatible(const NullabilityKind expectedKind, const NullabilityKind actualKind) {
+    if (expectedKind == NullabilityKind::NonNull) {
+      if (actualKind != NullabilityKind::NonNull) {
         return false;
       }
     }
@@ -360,29 +307,13 @@ public:
     return true;
   }
 
-  bool isNonNullExpr(Expr *expr) {
-    Expr *e = expr->IgnoreParenCasts();
-    if (llvm::dyn_cast<ObjCStringLiteral>(e)) return true;
-    if (llvm::dyn_cast<ObjCBoxedExpr>(e)) return true;
-    if (llvm::dyn_cast<ObjCArrayLiteral>(e)) return true;
-    if (llvm::dyn_cast<ObjCDictionaryLiteral>(e)) return true;
-    if (llvm::dyn_cast<ObjCSelectorExpr>(e)) return true;
-    if (llvm::dyn_cast<DeclRefExpr>(e)) {
-      DeclRefExpr *ref = llvm::dyn_cast<DeclRefExpr>(e);
-      if (ref) {
-        return ref->getNameInfo().getAsString() == "self";
-      }
-    }
-
-    return false;
-  }
-
-  Optional<NullabilityKind> nullability(const QualType &qtype) {
-    const Type *type = qtype.getTypePtr();
+  bool isNullabilityCompatible(const QualType expectedType, const NullabilityKind actualKind) {
+    const Type *type = expectedType.getTypePtrOrNull();
     if (type) {
-      return type->getNullability(Context);
+      NullabilityKind expectedKind = type->getNullability(Context).getValueOr(NullabilityKind::Unspecified);
+      return isNullabilityCompatible(expectedKind, actualKind);
     } else {
-      return Optional<NullabilityKind>::create(NULL);
+      return true;
     }
   }
 
@@ -390,6 +321,7 @@ private:
   ASTContext &Context;
   std::vector<ErrorMessage> &Errors;
   QualType ReturnType;
+  ExprNullabilityCalculator &NullabilityCalculator;
 };
 
 class NullCheckVisitor : public RecursiveASTVisitor<NullCheckVisitor> {
@@ -401,8 +333,9 @@ public:
     if (methodDecl) {
       if (methodDecl->hasBody()) {
         QualType returnType = methodDecl->getReturnType();
+        ExprNullabilityCalculator calculator(Context);
 
-        MethodBodyChecker checker(Context, Errors, returnType);
+        MethodBodyChecker checker(Context, Errors, returnType, calculator);
         checker.TraverseStmt(methodDecl->getBody());
       }
     }
