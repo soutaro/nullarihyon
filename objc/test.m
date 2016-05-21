@@ -12,7 +12,7 @@ NS_ASSUME_NONNULL_BEGIN
 @implementation TestClass
 
 - (void)test {
-  NSString *s = @"hoge";
+  NSString *s = [NSString stringWithFormat:@"hoge %@", @123];
   self.nonnullString = s;
   self.nullableString = s;
 
