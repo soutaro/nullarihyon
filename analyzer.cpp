@@ -160,17 +160,38 @@ public:
 
   NullabilityKind VisitObjCMessageExpr(ObjCMessageExpr *expr) {
     ObjCMessageExpr::ReceiverKind receiverKind = expr->getReceiverKind();
+    ObjCMethodDecl *decl = expr->getMethodDecl();
+    Selector selector = expr->getSelector();
+    std::string name = selector.getAsString();
+    bool isReceiverNullable = getNullability(expr->getReceiverType()) != NullabilityKind::NonNull;
 
     if (receiverKind == ObjCMessageExpr::ReceiverKind::Instance) {
       Expr *receiver = expr->getInstanceReceiver();
       NullabilityKind receiverNullability = Visit(receiver->IgnoreParenImpCasts());
-      if (receiverNullability != NullabilityKind::NonNull) {
-        return NullabilityKind::Nullable;
-      }
+      isReceiverNullable = (receiverNullability != NullabilityKind::NonNull);
     }
 
-    ObjCMethodDecl *decl = expr->getMethodDecl();
+    if (receiverKind == ObjCMessageExpr::ReceiverKind::Class) {
+      isReceiverNullable = false;
+    }
+
+    // Shortcut when receiver is nullable
+    if (isReceiverNullable) {
+      return NullabilityKind::Nullable;
+    }
+
     if (decl) {
+      // If the method is alloc/class and no nullability is given, assume it returns nonnull
+      if (name == "alloc" || name == "class") {
+        const Type *type = decl->getReturnType().getTypePtrOrNull();
+        if (type) {
+          Optional<NullabilityKind> kind = type->getNullability(Context);
+          if (!kind.hasValue()) {
+            return NullabilityKind::NonNull;
+          }
+        }
+      }
+
       return getNullability(decl->getReturnType());
     } else {
       return NullabilityKind::Unspecified;
@@ -412,26 +433,26 @@ public:
         VariableNullabilityInference varInference(Context, env);
         varInference.TraverseStmt(methodDecl->getBody());
 
-        // NullabilityKindEnvironment::iterator it;
-        // for (it = env.begin(); it != env.end(); it++) {
-        //   VarDecl *decl = it->first;
-        //   NullabilityKind kind = it->second;
+        NullabilityKindEnvironment::iterator it;
+        for (it = env.begin(); it != env.end(); it++) {
+          VarDecl *decl = it->first;
+          NullabilityKind kind = it->second;
 
-        //   std::string x = "";
-        //   switch (kind) {
-        //     case NullabilityKind::Unspecified:
-        //       x = "unspecified";
-        //       break;
-        //     case NullabilityKind::NonNull:
-        //       x = "nonnull";
-        //       break;
-        //     case NullabilityKind::Nullable:
-        //       x = "nullable";
-        //       break;
-        //   }
+          std::string x = "";
+          switch (kind) {
+            case NullabilityKind::Unspecified:
+              x = "unspecified";
+              break;
+            case NullabilityKind::NonNull:
+              x = "nonnull";
+              break;
+            case NullabilityKind::Nullable:
+              x = "nullable";
+              break;
+          }
 
-        //   std::cerr << decl->getNameAsString() << ": " << x << std::endl;
-        // }
+          std::cerr << decl->getNameAsString() << ": " << x << std::endl;
+        }
 
         QualType returnType = methodDecl->getReturnType();
         ExprNullabilityCalculator calculator(Context, env);
