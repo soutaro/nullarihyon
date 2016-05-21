@@ -246,7 +246,7 @@ public:
   }
 
   NullabilityKind VisitBlockExpr(BlockExpr *expr) {
-    return getNullability(expr->getType());
+    return NullabilityKind::NonNull;
   }
 
   NullabilityKind VisitStmtExpr(StmtExpr *expr) {
