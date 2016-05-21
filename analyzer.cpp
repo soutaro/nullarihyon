@@ -18,89 +18,87 @@ public:
     : Context(Context), Errors(errors), ReturnType(returnType) {
   }
 
-  bool VisitStmt(Stmt *stmt) {
-    DeclStmt *decl = llvm::dyn_cast<DeclStmt>(stmt);
-    if (decl) {
-      DeclGroupRef group = decl->getDeclGroup();
-      DeclGroupRef::iterator it;
-      for(it = group.begin(); it != group.end(); it++) {
-        VarDecl *vd = llvm::dyn_cast<VarDecl>(*it);
-        if (vd) {
-          QualType varType = vd->getType();
+  bool VisitDeclStmt(DeclStmt *decl) {
+    DeclGroupRef group = decl->getDeclGroup();
+    DeclGroupRef::iterator it;
+    for(it = group.begin(); it != group.end(); it++) {
+      VarDecl *vd = llvm::dyn_cast<VarDecl>(*it);
+      if (vd) {
+        QualType varType = vd->getType();
 
-          Expr *init = vd->getInit();
-          if (init) {
-            QualType valType = this->getType(init);
-            if (!this->isNonNullExpr(init)) {
-              if (!this->testTypeNullability(varType, valType)) {
-                std::string loc = vd->getLocation().printToString(Context.getSourceManager());
-                std::ostringstream s;
-                s << "var decl (" << vd->getNameAsString() << ")";
-                Errors.push_back(ErrorMessage(loc, s));
-              }
-            }
-          }
-        }
-      }
-    }
-
-    ObjCMessageExpr *callExpr = llvm::dyn_cast<ObjCMessageExpr>(stmt);
-    if (callExpr) {
-      ObjCMethodDecl *decl = callExpr->getMethodDecl();
-      if (decl) {
-        unsigned index = 0;
-
-        ObjCMethodDecl::param_iterator it;
-        for (it = decl->param_begin(); it != decl->param_end(); it++) {
-          ParmVarDecl *d = *it;
-          QualType paramQType = d->getType();
-
-          Expr *arg = callExpr->getArg(index);
-          QualType argType = this->getType(arg);
-
-          if (!this->isNonNullExpr(arg)) {
-            if (!this->testTypeNullability(paramQType, argType)) {
-              std::string loc = arg->getExprLoc().printToString(Context.getSourceManager());
+        Expr *init = vd->getInit();
+        if (init) {
+          QualType valType = this->getType(init);
+          if (!this->isNonNullExpr(init)) {
+            if (!this->testTypeNullability(varType, valType)) {
+              std::string loc = vd->getLocation().printToString(Context.getSourceManager());
               std::ostringstream s;
-              s << "method call (" << decl->getNameAsString() << ", " << index << ")";
+              s << "var decl (" << vd->getNameAsString() << ")";
               Errors.push_back(ErrorMessage(loc, s));
             }
           }
-
-          index++;
         }
       }
-    }
+    }    
 
-    BinaryOperator *assign = llvm::dyn_cast<BinaryOperator>(stmt);
-    if (assign) {
-      if (assign->getOpcode() == BO_Assign) {
-        Expr *lhs = assign->getLHS();
-        Expr *rhs = assign->getRHS();
+    return true;
+  }
 
-        if (!this->isNonNullExpr(rhs)) {
-          if (!this->testTypeNullability(this->getType(lhs), this->getType(rhs))) {
-            std::string loc = rhs->getExprLoc().printToString(Context.getSourceManager());
+  bool VisitObjCMessageExpr(ObjCMessageExpr *callExpr) {
+    ObjCMethodDecl *decl = callExpr->getMethodDecl();
+    if (decl) {
+      unsigned index = 0;
+
+      ObjCMethodDecl::param_iterator it;
+      for (it = decl->param_begin(); it != decl->param_end(); it++) {
+        ParmVarDecl *d = *it;
+        QualType paramQType = d->getType();
+
+        Expr *arg = callExpr->getArg(index);
+        QualType argType = this->getType(arg);
+
+        if (!this->isNonNullExpr(arg)) {
+          if (!this->testTypeNullability(paramQType, argType)) {
+            std::string loc = arg->getExprLoc().printToString(Context.getSourceManager());
             std::ostringstream s;
-            s << "assignment";
+            s << "method call (" << decl->getNameAsString() << ", " << index << ")";
             Errors.push_back(ErrorMessage(loc, s));
           }
         }
+
+        index++;
       }
     }
 
-    ReturnStmt *retStmt = llvm::dyn_cast<ReturnStmt>(stmt);
-    if (retStmt) {
-      Expr *value = retStmt->getRetValue();
-      if (value) {
-        if (!this->isNonNullExpr(value)) {
-          QualType type = this->getType(value);
-          if (!this->testTypeNullability(ReturnType, type)) {
-            std::string loc = value->getExprLoc().printToString(Context.getSourceManager());
-            std::ostringstream s;
-            s << "return";
-            Errors.push_back(ErrorMessage(loc, s));
-          }
+    return true;
+  }
+
+  bool VisitBinAssign(BinaryOperator *assign) {
+    Expr *lhs = assign->getLHS();
+    Expr *rhs = assign->getRHS();
+
+    if (!this->isNonNullExpr(rhs)) {
+      if (!this->testTypeNullability(this->getType(lhs), this->getType(rhs))) {
+        std::string loc = rhs->getExprLoc().printToString(Context.getSourceManager());
+        std::ostringstream s;
+        s << "assignment";
+        Errors.push_back(ErrorMessage(loc, s));
+      }
+    }
+
+    return true;
+  }
+
+  bool VisitReturnStmt(ReturnStmt *retStmt) {
+    Expr *value = retStmt->getRetValue();
+    if (value) {
+      if (!this->isNonNullExpr(value)) {
+        QualType type = this->getType(value);
+        if (!this->testTypeNullability(ReturnType, type)) {
+          std::string loc = value->getExprLoc().printToString(Context.getSourceManager());
+          std::ostringstream s;
+          s << "return";
+          Errors.push_back(ErrorMessage(loc, s));
         }
       }
     }
