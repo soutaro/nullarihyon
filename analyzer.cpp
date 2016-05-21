@@ -343,6 +343,27 @@ public:
     return true;
   }
 
+  bool VisitCStyleCastExpr(CStyleCastExpr *expr) {
+    Expr *subExpr = expr->getSubExpr();
+    const Type *subExprType = subExpr->getType().getTypePtrOrNull();
+
+    const Type *type = expr->getType().getTypePtrOrNull();
+
+    if (subExprType && type) {
+      Optional<NullabilityKind> subExprKind = subExprType->getNullability(Context);
+      Optional<NullabilityKind> exprKind = type->getNullability(Context);
+
+      if (subExprKind.getValueOr(NullabilityKind::Unspecified) != exprKind.getValueOr(NullabilityKind::Unspecified)) {
+        if (subExpr->getType().getDesugaredType(Context) != expr->getType().getDesugaredType(Context)) {
+          std::string loc = expr->getExprLoc().printToString(Context.getSourceManager());
+          Errors.push_back(ErrorMessage(loc, "nullability cast cannot change base type"));
+        }
+      }
+    }
+
+    return true;
+  }
+
   NullabilityKind calculateNullability(Expr *expr) {
     return NullabilityCalculator.Visit(expr->IgnoreParenImpCasts());
   }
