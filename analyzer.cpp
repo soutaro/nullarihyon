@@ -120,23 +120,29 @@ public:
       isReceiverNullable = false;
     }
 
+    if (receiverKind == ObjCMessageExpr::ReceiverKind::SuperInstance) {
+      isReceiverNullable = false;
+    }
+
     // Shortcut when receiver is nullable
     if (isReceiverNullable) {
       return NullabilityKind::Nullable;
     }
 
-    if (decl) {
-      // If the method is alloc/class and no nullability is given, assume it returns nonnull
-      if (name == "alloc" || name == "class") {
+    // If the method is alloc/class and no nullability is given, assume it returns nonnull
+    if (name == "alloc" || name == "class" || "init") {
+      Optional<NullabilityKind> kind;
+      if (decl) {
         const Type *type = decl->getReturnType().getTypePtrOrNull();
-        if (type) {
-          Optional<NullabilityKind> kind = type->getNullability(Context);
-          if (!kind.hasValue()) {
-            return NullabilityKind::NonNull;
-          }
-        }
+        kind = type->getNullability(Context);
       }
 
+      if (!kind.hasValue()) {
+        return NullabilityKind::NonNull;
+      }
+    }
+
+    if (decl) {
       return getNullability(decl->getReturnType());
     } else {
       return NullabilityKind::Unspecified;

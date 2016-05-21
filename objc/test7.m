@@ -1,4 +1,4 @@
-// Class alloc is assumed nonnull
+// alloc/class/init are assumed nonnull
 
 #import <Foundation/Foundation.h>
 
@@ -16,6 +16,16 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)test2 {
   Class _Nonnull klass = [NSString class];
   NSString * _Nonnull x2 = [[klass alloc] init];
+}
+
+- (void)test3 {
+  Test7 * _Nonnull x = [[[self class] alloc] init];
+}
+
+- (instancetype)initWithName:(NSString *)name {
+  Test7 *a = [super init];
+  self = a;
+  return self;
 }
 
 @end
