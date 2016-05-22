@@ -244,7 +244,13 @@ public:
     MethodBodyChecker(ASTContext &Context, std::vector<ErrorMessage> &errors, QualType returnType, ExprNullabilityCalculator &Calculator)
         : Context(Context), Errors(errors), ReturnType(returnType), NullabilityCalculator(Calculator) {
     }
-
+    
+    DiagnosticBuilder WarningReport(SourceLocation location) {
+        DiagnosticsEngine &diagEngine = Context.getDiagnostics();
+        unsigned diagID = diagEngine.getCustomDiagID(DiagnosticsEngine::Warning, "%0") ;
+        return diagEngine.Report(location, diagID);
+    }
+    
     bool VisitDeclStmt(DeclStmt *decl) {
         DeclGroupRef group = decl->getDeclGroup();
         DeclGroupRef::iterator it;
@@ -256,10 +262,7 @@ public:
                 Expr *init = vd->getInit();
                 if (init) {
                     if (!isNullabilityCompatible(varKind, calculateNullability(init))) {
-                        std::string loc = vd->getLocation().printToString(Context.getSourceManager());
-                        std::ostringstream s;
-                        s << "var decl (" << vd->getNameAsString() << ")";
-                        Errors.push_back(ErrorMessage(loc, s));
+                        WarningReport(init->getExprLoc()) << "Nullability mismatch on variable declaration";
                     }
                 }
             }
@@ -282,10 +285,7 @@ public:
                 NullabilityKind argNullability = calculateNullability(arg);
 
                 if (!isNullabilityCompatible(paramQType, argNullability)) {
-                    std::string loc = arg->getExprLoc().printToString(Context.getSourceManager());
-                    std::ostringstream s;
-                    s << "method call (" << decl->getNameAsString() << ", " << index << ")";
-                    Errors.push_back(ErrorMessage(loc, s));
+                    WarningReport(arg->getExprLoc()) << "Nullability mismatch on method call argument";
                 }
 
                 index++;
@@ -304,11 +304,8 @@ public:
             NullabilityKind rhsNullability = calculateNullability(rhs);
 
             if (!isNullabilityCompatible(lhsNullability, rhsNullability)) {
-                std::string loc = rhs->getExprLoc().printToString(Context.getSourceManager());
-                std::ostringstream s;
-                s << "assignment";
-                Errors.push_back(ErrorMessage(loc, s));
-            }            
+                WarningReport(rhs->getExprLoc()) << "Nullability mismatch on assignment";
+            }
         }
 
         return true;
@@ -318,10 +315,7 @@ public:
         Expr *value = retStmt->getRetValue();
         if (value) {
             if (!isNullabilityCompatible(ReturnType, calculateNullability(value))) {
-                std::string loc = value->getExprLoc().printToString(Context.getSourceManager());
-                std::ostringstream s;
-                s << "return";
-                Errors.push_back(ErrorMessage(loc, s));
+                WarningReport(value->getExprLoc()) << "Nullability mismatch on return";
             }
         }
 
@@ -355,8 +349,7 @@ public:
 
             if (subExprKind.getValueOr(NullabilityKind::Unspecified) != exprKind.getValueOr(NullabilityKind::Unspecified)) {
                 if (subExpr->getType().getDesugaredType(Context) != expr->getType().getDesugaredType(Context)) {
-                    std::string loc = expr->getExprLoc().printToString(Context.getSourceManager());
-                    Errors.push_back(ErrorMessage(loc, "nullability cast cannot change base type"));
+                    WarningReport(expr->getExprLoc()) << "Cast on nullability cannot change base type";
                 }
             }
         }
@@ -489,9 +482,10 @@ public:
                             x = "nullable";
                             break;
                     }
-
-                    std::string loc = decl->getLocation().printToString(Context.getSourceManager());
-                    std::cerr << loc << ": " << decl->getNameAsString() << ": " << x << std::endl;
+                    
+                    DiagnosticsEngine &engine = Context.getDiagnostics();
+                    unsigned id = engine.getCustomDiagID(DiagnosticsEngine::Note, "Variable nullability: %0");
+                    engine.Report(decl->getLocation(), id) << x;
                 }
 
                 QualType returnType = methodDecl->getReturnType();
