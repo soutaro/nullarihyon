@@ -1,7 +1,7 @@
 cmake_minimum_required (VERSION 2.6)
 project (Nullabilint)
 
-set (LLVM_CONFIG /Users/soutaro/src/nullabilint/build/bin/llvm-config)
+set (LLVM_CONFIG build/bin/llvm-config)
 execute_process (
   COMMAND ${LLVM_CONFIG} --src-root
   OUTPUT_VARIABLE LLVM_BASE
