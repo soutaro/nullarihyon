@@ -53,11 +53,13 @@ include_directories("${LLVM_BASE}/include")
 include_directories("${LLVM_BASE}/tools/clang/include")
 include_directories("${LLVM_BUILD}/include")
 include_directories("${LLVM_BUILD}/tools/clang/include")
+add_definitions (-D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS)
+add_definitions (-D_GNU_SOURCE -DHAVE_CLANG_CONFIG_H)
 
 link_directories("${LLVM_BUILD}/lib")
 link_directories("${LLVM_BUILD}/tools/clang/lib")
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${LLVM_CXX_FLAGS}")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${LLVM_CXX_FLAGS} -std=c++11")
 
 file(GLOB_RECURSE CORE_SOURCES src/*.cpp src/*.h)
 
