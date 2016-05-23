@@ -6,7 +6,7 @@ require "open3"
 
 $Verbose = false
 $Config = Pathname(".nullabilint.yml")
-$Executable = "./tool"
+$Executable = "nullabilint-core"
 
 additional_options = []
 
@@ -25,34 +25,7 @@ config = $Config.file? ? YAML.load($Config.open) : {}
 
 options = (config[:commandline_options] || []) + additional_options
 
-for arg in ARGV
-  command_line = [$Executable, arg, "--"] + options
-  puts command_line.join(" ")
-
-  status = Open3.popen3 *command_line do |stdin, stdout, stderr, thread|
-    stdin.close
-
-    out = Thread.new do
-      while line = stdout.gets
-        STDOUT.print line
-      end
-    end
-
-    err = Thread.new do
-      while line = stderr.gets
-        STDERR.print line if $Verbose
-      end
-    end
-
-    thread.join()
-    out.join
-    err.join
-
-    thread.value
-  end
-
-  unless status.success?
-    STDERR.puts "Failed to execute analyzer..."
-  end
-end
+command_line = [$Executable] + ARGV + ["--"] + options
+puts command_line.join(" ")
+system *command_line
 
