@@ -26,29 +26,128 @@ $ make
 ## Build nullabilint
 
 ```
-$ make tool
-$ make tool LLVMCONFIG=path/to/llvm-config  # If you have LLVM different directory
+$ cmake .
+$ cmake --build .
 ```
 
 ## Run the tool
 
-```
-$ ./tool objc/SMHello.m -- -I`pwd`/build/lib/clang/3.9.0/include -F/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.11.sdk/System/Library/Frameworks -I build/include -I llvm/include -I build/tools/clang/include -I llvm/tools/clang/include -I /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.11.sdk/usr/include -I/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/../include/c++/v1 -I/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/../lib/clang/7.3.0/include -I /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include
+There are two tools to run the program, `frontend.rb` and `xcode.rb`.
+
+`frontend.rb` would be the good one to try. `xcode.rb` is for Xcode integration.
+
+## Configuration
+
+Make `.nullabilint.yml` file for configuration.
+The configuration contains commandline options for compiler, including header file search paths and some options.
+The file is used both `frontend.rb` and `xcode.rb`.
+
+Typical configuration for OS X programs should be like the following:
+
+```yaml
+:commandline_options:
+  - -x
+  - objective-c
+  - -std=gnu99
+  - -fobjc-arc
+  - -fobjc-exceptions
+  - -fmodules
+  - -fasm-blocks
+  - -fstrict-aliasing
+  - -resource-dir
+  - /Users/soutaro/src/nullabilint/build/lib/clang/3.9.0
+  - -isysroot
+  - /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.11.sdk
 ```
 
-The `-I` and `-F` paths are for my case. You can find your paths with `clang` with `-v`.
+For iOS programs, something like the following should work:
+
+```yaml
+:commandline_options:
+  - -x
+  - objective-c
+  - -std=gnu99
+  - -fobjc-arc
+  - -fobjc-exceptions
+  - -fmodules
+  - -fasm-blocks
+  - -fstrict-aliasing
+  - -resource-dir
+  - /Users/soutaro/src/nullabilint/build/lib/clang/3.9.0
+  - -isysroot
+  - /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator9.3.sdk
+```
+
+The main difference is path to SDK.
+
+## frontend.rb
+
+Try the tool with `frontend.rb`:
 
 ```
-$ clang -v -fsyntax-only objc/SMHello.m
-......
-#include "..." search starts here:
-#include <...> search starts here:
- /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/../lib/clang/7.3.0/include
- /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include
- /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.11.sdk/usr/include
- /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.11.sdk/System/Library/Frameworks (framework directory)
-End of search list.
+$ ruby frontend.rb -e ./nullabilint-core objc/test.m
 ```
+
+You can pass additional configuration for compiler with `-X` option.
+
+```
+$ ruby frontend.rb -e ./nullabilint-core -X-I -X/usr/include objc/test.m
+```
+
+## xcode.rb
+
+`xcode.rb` is for Xcode integration.
+The script is expected to be invoked during Xcode build session.
+
+* It reads `.xcodeproj` from env var and find `.m` files
+* It reads some compiler settings from env var
+
+Add `.nullabilint.yml` in your source code directory. A typical configuration would be like:
+
+```
+:commandline_options:
+  - -x
+  - objective-c
+  - -std=gnu99
+  - -fobjc-arc
+  - -fobjc-exceptions
+  - -fmodules
+  - -fasm-blocks
+  - -fstrict-aliasing
+  - -resource-dir
+  - /Users/soutaro/src/nullabilint/build/lib/clang/3.9.0
+  - -isysroot
+  - /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator9.3.sdk
+  - -isystem
+  - /Users/soutaro/src/ubiregi-client/Pods/Headers/Public
+  - -isystem
+  - /Users/soutaro/src/ubiregi-client/Pods/Headers/Public/AWSiOSSDKv2
+  - -isystem
+  - /Users/soutaro/src/ubiregi-client/Pods/Headers/Public/CrittercismSDK
+  - -isystem
+  - /Users/soutaro/src/ubiregi-client/Pods/Headers/Public/GoogleAnalytics
+  - -isystem
+  - /Users/soutaro/src/ubiregi-client/Pods/Headers/Public/Helpshift
+```
+
+If you are using CocoaPods, some header directries should be explicitly added in the config file.
+Most of `.framework` pods are automatically imported by the script.
+
+Add new `Run Script` phase in your Xcode project and write something like:
+
+```
+/usr/bin/ruby /Users/soutaro/src/nullabilint/xcode.rb -e /Users/soutaro/src/nullabilint/nullabilint-core
+```
+
+The tools runs after each build, and run check for updated source code.
+
+> The tools runs very slowly.
+> On my Mac Pro 2013, analysis of project with 500 source code takes ~15 mins.
+> Try with small project.
+
+### Restriction
+
+* It does not support prefix headers
 
 # Nullability Check
 
@@ -59,65 +158,16 @@ This tool checks nullability on:
 * Objective-C method call
 * Returning value
 
-If *expected* type has `_Nonnull` attribute, and *actual* type does not have, the tool reports an error like:
+If *expected* type has `_Nonnull` attribute, and *actual* type does not have, the tool reports warnings.
 
-```
-AttributedType 0x7fbf941a9490 'NSNumber * _Nonnull' sugar
-|-ObjCObjectPointerType 0x7fbf941a9460 'NSNumber *'
-| `-ObjCInterfaceType 0x7fbf938388d0 'NSNumber'
-|   `-ObjCInterface 0x7fbf941a91e8 'NSNumber'
-`-ObjCObjectPointerType 0x7fbf941a9460 'NSNumber *'
-  `-ObjCInterfaceType 0x7fbf938388d0 'NSNumber'
-    `-ObjCInterface 0x7fbf941a91e8 'NSNumber'
-AttributedType 0x7fbf93905f30 'NSNumber * _Nullable' sugar
-|-ObjCObjectPointerType 0x7fbf941a9460 'NSNumber *'
-| `-ObjCInterfaceType 0x7fbf938388d0 'NSNumber'
-|   `-ObjCInterface 0x7fbf941a91e8 'NSNumber'
-`-ObjCObjectPointerType 0x7fbf941a9460 'NSNumber *'
-  `-ObjCInterfaceType 0x7fbf938388d0 'NSNumber'
-    `-ObjCInterface 0x7fbf941a91e8 'NSNumber'
-Nullability mismatch!! (var decl:number2)
-/Users/soutaro/src/nullabilint/objc/SMHello.m:7:23
-AttributedType 0x7fbf941a9490 'NSNumber * _Nonnull' sugar
-|-ObjCObjectPointerType 0x7fbf941a9460 'NSNumber *'
-| `-ObjCInterfaceType 0x7fbf938388d0 'NSNumber'
-|   `-ObjCInterface 0x7fbf941a91e8 'NSNumber'
-`-ObjCObjectPointerType 0x7fbf941a9460 'NSNumber *'
-  `-ObjCInterfaceType 0x7fbf938388d0 'NSNumber'
-    `-ObjCInterface 0x7fbf941a91e8 'NSNumber'
-AttributedType 0x7fbf961dca40 'NSNumber * _Null_unspecified' sugar
-|-ObjCObjectPointerType 0x7fbf941a9460 'NSNumber *'
-| `-ObjCInterfaceType 0x7fbf938388d0 'NSNumber'
-|   `-ObjCInterface 0x7fbf941a91e8 'NSNumber'
-`-ObjCObjectPointerType 0x7fbf941a9460 'NSNumber *'
-  `-ObjCInterfaceType 0x7fbf938388d0 'NSNumber'
-    `-ObjCInterface 0x7fbf941a91e8 'NSNumber'
-Nullability mismatch!! (assignment)
-/Users/soutaro/src/nullabilint/objc/SMHello.m:11:13
-```
+# Known Issue
 
-It also prints a lot of warnings and errors like:
+* It does not check params and return types for block types (block type itself is checked)
+* It checks casts changing nullability, but is not working correctly...
 
-```
-...
-/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.11.sdk/System/Library/Frameworks/ApplicationServices.framework/Frameworks/QD.framework/Headers/ColorSyncDeprecated.h:2034:3: warning: 'CMDeviceProfileInfo'
-      is deprecated: first deprecated in OS X 10.6 [-Wdeprecated-declarations]
-  CMDeviceProfileInfo  profiles[1];           /* The profile info records */
-  ^
-/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.11.sdk/System/Library/Frameworks/ApplicationServices.framework/Frameworks/QD.framework/Headers/ColorSyncDeprecated.h:2015:3: note: 'CMDeviceProfileInfo' has
-      been explicitly marked deprecated here
-} CMDeviceProfileInfo DEPRECATED_IN_MAC_OS_X_VERSION_10_6_AND_LATER;
-...
-```
+# Future works
 
-I don't know what is happening...
-
-# Failures
-
-I have tried the tool with some non-trivial sources I'm working on, and found some difficulties.
-
-1. `[NSDictionary valueForKey:]` returns `nullable`
-2. `for` loop variables should be `_Nonnull`
-3. Some `_Nonnull` attribute on global variables looks ignored
-
-1 and 2 seem essential. 3 seems strange to me, and I will have more investigation.
+* I'm planning to implement very simple *flow sensitive type*, for `if (x) { ... }` pattern.
+  In *then* clause, variable in condition can be treated as `_Nonnull`.
+* Performance improvement (it's too slow)
+* Setup improvement (should be made easier)
