@@ -8,7 +8,6 @@
 #include <clang/AST/RecursiveASTVisitor.h>
 
 #include "analyzer.h"
-#include "ErrorMessage.h"
 
 using namespace llvm;
 using namespace clang;
@@ -241,8 +240,8 @@ private:
 
 class MethodBodyChecker : public RecursiveASTVisitor<MethodBodyChecker> {
 public:
-    MethodBodyChecker(ASTContext &Context, std::vector<ErrorMessage> &errors, QualType returnType, ExprNullabilityCalculator &Calculator)
-        : Context(Context), Errors(errors), ReturnType(returnType), NullabilityCalculator(Calculator) {
+    MethodBodyChecker(ASTContext &Context, QualType returnType, ExprNullabilityCalculator &Calculator)
+        : Context(Context), ReturnType(returnType), NullabilityCalculator(Calculator) {
     }
     
     DiagnosticBuilder WarningReport(SourceLocation location) {
@@ -329,7 +328,7 @@ public:
             const FunctionProtoType *funcType = llvm::dyn_cast<FunctionProtoType>(blockType->getPointeeType().getTypePtr());
             if (funcType) {
                 QualType retType = funcType->getReturnType();
-                MethodBodyChecker checker(Context, Errors, retType, NullabilityCalculator);
+                MethodBodyChecker checker(Context, retType, NullabilityCalculator);
                 checker.TraverseStmt(blockExpr->getBody());
             }
         }
@@ -383,7 +382,6 @@ public:
 
 private:
     ASTContext &Context;
-    std::vector<ErrorMessage> &Errors;
     QualType ReturnType;
     ExprNullabilityCalculator &NullabilityCalculator;
 };
@@ -452,7 +450,7 @@ private:
 
 class NullCheckVisitor : public RecursiveASTVisitor<NullCheckVisitor> {
 public:
-    NullCheckVisitor(ASTContext &context, std::vector<ErrorMessage> &errors) : Context(context), Errors(errors) {}
+    NullCheckVisitor(ASTContext &context) : Context(context) {}
 
     bool VisitDecl(Decl *decl) {
         ObjCMethodDecl *methodDecl = llvm::dyn_cast<ObjCMethodDecl>(decl);
@@ -489,7 +487,7 @@ public:
                 }
 
                 QualType returnType = methodDecl->getReturnType();
-                MethodBodyChecker checker(Context, Errors, returnType, calculator);
+                MethodBodyChecker checker(Context, returnType, calculator);
                 checker.TraverseStmt(methodDecl->getBody());
             }
         }
@@ -498,21 +496,13 @@ public:
 
 private:
     ASTContext &Context;
-    std::vector<ErrorMessage> &Errors;
 };
 
 class NullCheckConsumer : public ASTConsumer {
 public:
     virtual void HandleTranslationUnit(clang::ASTContext &Context) {
-        std::vector<ErrorMessage> errors;
-
-        NullCheckVisitor visitor(Context, errors);
+        NullCheckVisitor visitor(Context);
         visitor.TraverseDecl(Context.getTranslationUnitDecl());
-
-        std::vector<ErrorMessage>::iterator it;
-        for (it = errors.begin(); it != errors.end(); it++) {
-            std::cout << it->getLocation() << " " << it->getMessage() << std::endl;
-        }        
     }
 };
 
