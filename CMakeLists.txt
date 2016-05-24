@@ -68,10 +68,12 @@ set (USER_LIBS
 )
 
 FOREACH (header_path ${LLVM_INCLUDE_PATHS})
+  get_filename_component(header_path ${header_path} ABSOLUTE)
   include_directories(${header_path})
 ENDFOREACH(header_path)
 
 FOREACH (lib_path ${LLVM_LIB_PATHS})
+  get_filename_component(lib_path ${lib_path} ABSOLUTE)
   link_directories(${lib_path})
 ENDFOREACH(lib_path)
 
