@@ -87,3 +87,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${LLVM_CXX_FLAGS}")
 
 add_subdirectory (src)
 add_subdirectory (driver)
+
+enable_testing ()
+add_subdirectory (vendor/googletest)
+add_subdirectory (test)
