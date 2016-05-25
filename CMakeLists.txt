@@ -5,7 +5,10 @@ if (NOT LLVM_ROOT)
   message (FATAL_ERROR "Specify location of llvm from command line: -DLLVM_ROOT=/opt/local/clang+llvm-3.8.0-x86_64-apple-darwin")
 endif()
 
-get_filename_component(LLVM_ROOT ${LLVM_ROOT} ABSOLUTE)
+if (NOT IS_ABSOLUTE ${LLVM_ROOT})
+  set (LLVM_ROOT ${CMAKE_CURRENT_BINARY_DIR}/${LLVM_ROOT})
+  get_filename_component(LLVM_ROOT ${LLVM_ROOT} ABSOLUTE)
+endif()
 
 if (NOT LLVM_CONFIG)
   set (LLVM_CONFIG ${LLVM_ROOT}/bin/llvm-config)
@@ -82,7 +85,5 @@ add_definitions (-D_GNU_SOURCE -DHAVE_CLANG_CONFIG_H)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${LLVM_CXX_FLAGS}")
 
-file(GLOB_RECURSE CORE_SOURCES src/*.cpp src/*.h)
-
-add_executable(nullabilint-core ${CORE_SOURCES})
-target_link_libraries(nullabilint-core ${LLVM_LIBS} ${CLANG_LIBS} ${USER_LIBS})
+add_subdirectory (src)
+add_subdirectory (driver)
