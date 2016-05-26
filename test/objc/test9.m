@@ -12,9 +12,9 @@
 - (void)argumentIsNullable:(nullable NSString *)x {}
 
 - (void)test2 {
-  NSString *x = @""; // x is nonnull
+  NSString *x = @""; // expected-remark{{Variable nullability: nonnull}}
   NSString * _Nullable y = @""; // y is nullable
-  NSString *z = y; // z is nullable
+  NSString *z = y; // expected-remark{{Variable nullability: nullable}}
 
   [self argumentIsNonnull:x]; // ok
   [self argumentIsNonnull:y]; // expected-warning{{Nullability mismatch on method call argument}}

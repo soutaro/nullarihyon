@@ -21,18 +21,17 @@
 }
 
 - (void)test2 {
-  id x; // expected-note{{Variable nullability: unspecified}}
-  NSString *a; // expected-note{{Variable nullability: unspecified}}
+  id x;
+  NSString *a;
 
   a = (NSString * _Nonnull)x; // ok
 }
 
 - (void)test3 {
-  id<NSObjectProtocol> x; // expected-note{{Variable nullability: unspecified}}
-  NSString *a; // expected-note{{Variable nullability: unspecified}}
+  id<NSObjectProtocol> x;
+  NSString *a;
 
   a = (NSString * _Nonnull)x;
 }
 
 @end
-

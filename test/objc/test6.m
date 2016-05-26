@@ -14,7 +14,7 @@
 - (void)loopTest {
   NSArray<NSString *> *array;
 
-  for (NSString *x in array) { // expected-warning{{collection expression type 'NSArray<NSString *> *' may not respond to 'countByEnumeratingWithState:objects:count:'}}
+  for (NSString *x in array) { // expected-warning{{collection expression type 'NSArray<NSString *> *' may not respond to 'countByEnumeratingWithState:objects:count:'}}, expected-remark{{Variable nullability: nonnull}} 
     NSString * _Nonnull y = x; // ok
   }
 }

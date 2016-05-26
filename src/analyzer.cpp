@@ -127,7 +127,7 @@ public:
         if (isReceiverNullable) {
             return NullabilityKind::Nullable;
         }
-
+        
         // If the method is alloc/class and no nullability is given, assume it returns nonnull
         if (name == "alloc" || name == "class" || "init") {
             Optional<NullabilityKind> kind;
@@ -212,7 +212,12 @@ public:
         if (it != Env.end()) {
             return it->second;
         } else {
-            return NullabilityKind::Unspecified;
+            const Type *type = varDecl->getType().getTypePtrOrNull();
+            if (type) {
+                return type->getNullability(Context).getValueOr(NullabilityKind::Unspecified);
+            } else {
+                return NullabilityKind::Unspecified;
+            }
         }
     }
 
@@ -412,10 +417,10 @@ public:
                         Optional<NullabilityKind> kind = type->getNullability(Context);
                         Expr *init = vd->getInit();
 
-                        if (init && llvm::dyn_cast<ImplicitValueInitExpr>(init) == nullptr && !kind.hasValue()) {
-                            Env[vd] = Calculator.Visit(init);
-                        } else {
-                            Env[vd] = kind.getValueOr(NullabilityKind::Unspecified);
+                        if (type->isObjCObjectPointerType()) {
+                            if (init && llvm::dyn_cast<ImplicitValueInitExpr>(init) == nullptr && !kind.hasValue()) {
+                                Env[vd] = Calculator.Visit(init);
+                            }
                         }
                     }
                 }
@@ -488,7 +493,7 @@ public:
                     }
                     
                     DiagnosticsEngine &engine = Context.getDiagnostics();
-                    unsigned id = engine.getCustomDiagID(DiagnosticsEngine::Note, "Variable nullability: %0");
+                    unsigned id = engine.getCustomDiagID(DiagnosticsEngine::Remark, "Variable nullability: %0");
                     engine.Report(decl->getLocation(), id) << x;
                 }
 

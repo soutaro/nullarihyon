@@ -17,7 +17,7 @@
 }
 
 - (void)test2 {
-  NSString * _Nonnull x; // expected-note{{Variable nullability: nonnull}}
+  NSString * _Nonnull x;
 
   x = self.nonnullString; // no warning
   x = self.nullableString; // expected-warning{{Nullability mismatch on assignment}}
