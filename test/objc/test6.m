@@ -3,9 +3,7 @@
 // Since most commonly used form of `for x in ...` is with NSArray or NSDictionary,
 // we assume loop variables to be `_Nonnull` if no nullability is specified.
 
-#import <Foundation/Foundation.h>
-
-NS_ASSUME_NONNULL_BEGIN
+#import "polyfill.h"
 
 @interface Test6 : NSObject
 
@@ -14,13 +12,12 @@ NS_ASSUME_NONNULL_BEGIN
 @implementation Test6
 
 - (void)loopTest {
-  NSArray<NSString *> *array = @[@"a", @"b", @"c"];
+  NSArray<NSString *> *array;
 
-  for (NSString *x in array) {
-    NSString * _Nonnull y = x;
+  for (NSString *x in array) { // expected-warning{{collection expression type 'NSArray<NSString *> *' may not respond to 'countByEnumeratingWithState:objects:count:'}}
+    NSString * _Nonnull y = x; // ok
   }
 }
 
 @end
 
-NS_ASSUME_NONNULL_END

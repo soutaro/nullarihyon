@@ -1,15 +1,15 @@
 // Block expr is nonnull
 
-#import <Foundation/Foundation.h>
+// expected-no-diagnostics
 
-NS_ASSUME_NONNULL_BEGIN
+#import "polyfill.h"
 
 @interface Test8 : NSObject
 @end
 
 @implementation Test8
 
-- (void)test:(void(^)())block {
+- (void)test:(nonnull void(^)())block {
 
 }
 
@@ -19,4 +19,3 @@ NS_ASSUME_NONNULL_BEGIN
 
 @end
 
-NS_ASSUME_NONNULL_END
