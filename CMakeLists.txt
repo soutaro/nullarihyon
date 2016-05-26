@@ -90,4 +90,4 @@ add_subdirectory (driver)
 
 enable_testing ()
 add_subdirectory (vendor/googletest)
-add_subdirectory (test)
+add_subdirectory (unittest)
