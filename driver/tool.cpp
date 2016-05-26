@@ -10,14 +10,36 @@ using namespace llvm;
 using namespace clang;
 using namespace clang::tooling;
 
-static llvm::cl::OptionCategory MyToolCategory("my-tool options");
+static llvm::cl::OptionCategory NullabilintCategory("nullabilint-core options");
 
 static cl::extrahelp CommonHelp(CommonOptionsParser::HelpMessage);
 
-static cl::extrahelp MoreHelp("\nMore help text...");
+static cl::opt<bool> DebugOption("debug",
+                                 cl::desc("Enable debug mode (reports more verbosely)"),
+                                 cl::cat(NullabilintCategory));
+
+class NullCheckActionFactory : public FrontendActionFactory {
+public:
+    explicit NullCheckActionFactory(NullCheckAction *action) {
+        Action = std::unique_ptr<NullCheckAction>(action);
+    }
+    
+    FrontendAction *create() override {
+        return std::move(Action).get();
+    }
+    
+private:
+    std::unique_ptr<NullCheckAction> Action;
+};
 
 int main(int argc, const char **argv) {
-  CommonOptionsParser OptionsParser(argc, argv, MyToolCategory);
-  ClangTool Tool(OptionsParser.getCompilations(), OptionsParser.getSourcePathList());
-  return Tool.run(newFrontendActionFactory<NullCheckAction>().get());
+    CommonOptionsParser OptionsParser(argc, argv, NullabilintCategory);
+    ClangTool Tool(OptionsParser.getCompilations(), OptionsParser.getSourcePathList());
+    
+    auto action = new NullCheckAction;
+    action->setDebug(DebugOption);
+    
+    NullCheckActionFactory *factory = new NullCheckActionFactory(action);
+    
+    return Tool.run(factory);
 }

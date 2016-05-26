@@ -16,7 +16,7 @@ typedef std::unordered_map<VarDecl *, NullabilityKind> NullabilityKindEnvironmen
 
 class ExprNullabilityCalculator : public StmtVisitor<ExprNullabilityCalculator, NullabilityKind> {
 public:
-    ExprNullabilityCalculator(ASTContext &context, NullabilityKindEnvironment &env) : Context(context), Env(env) {
+    ExprNullabilityCalculator(ASTContext &context, NullabilityKindEnvironment &env, bool debug) : Context(context), Env(env), Debug(debug) {
 
     }
 
@@ -33,8 +33,11 @@ public:
         
         const Type *type = expr->getType().getTypePtrOrNull();
         if (type && type->isObjectType()) {
-            std::cerr << "VisitExpr; unknown expr" << std::endl;
-            expr->dump();
+            if (Debug) {
+                DiagnosticsEngine &diagEngine = Context.getDiagnostics();
+                unsigned diagID = diagEngine.getCustomDiagID(DiagnosticsEngine::Remark, "%0") ;
+                diagEngine.Report(expr->getExprLoc(), diagID) << "VisitExpr: unknown expr";
+            }
             return type->getNullability(Context).getValueOr(NullabilityKind::Unspecified);
         } else {
             return NullabilityKind::NonNull;
@@ -233,14 +236,18 @@ public:
     }
 
     NullabilityKind UnexpectedUnspecified(Expr *expr) {
-        std::cerr << "Unexpected unspecified:" << std::endl;
-        expr->dump();
+        if (Debug) {
+            DiagnosticsEngine &diagEngine = Context.getDiagnostics();
+            unsigned diagID = diagEngine.getCustomDiagID(DiagnosticsEngine::Remark, "%0") ;
+            diagEngine.Report(expr->getExprLoc(), diagID) << "Unexpected unspecified";
+        }
         return NullabilityKind::Unspecified;
     }
 
 private:
     ASTContext &Context;
     NullabilityKindEnvironment &Env;
+    bool Debug;
 };
 
 class MethodBodyChecker : public RecursiveASTVisitor<MethodBodyChecker> {
@@ -461,7 +468,7 @@ private:
 
 class NullCheckVisitor : public RecursiveASTVisitor<NullCheckVisitor> {
 public:
-    NullCheckVisitor(ASTContext &context) : Context(context) {}
+    NullCheckVisitor(ASTContext &context, bool debug) : Context(context), Debug(debug) {}
 
     bool VisitDecl(Decl *decl) {
         ObjCMethodDecl *methodDecl = llvm::dyn_cast<ObjCMethodDecl>(decl);
@@ -469,32 +476,34 @@ public:
             if (methodDecl->hasBody()) {
                 NullabilityKindEnvironment env;
 
-                ExprNullabilityCalculator calculator(Context, env);
+                ExprNullabilityCalculator calculator(Context, env, Debug);
                 VariableNullabilityInference varInference(Context, env, calculator);
 
                 varInference.TraverseStmt(methodDecl->getBody());
 
-                NullabilityKindEnvironment::iterator it;
-                for (it = env.begin(); it != env.end(); it++) {
-                    VarDecl *decl = it->first;
-                    NullabilityKind kind = it->second;
+                if (Debug) {
+                    NullabilityKindEnvironment::iterator it;
+                    for (it = env.begin(); it != env.end(); it++) {
+                        VarDecl *decl = it->first;
+                        NullabilityKind kind = it->second;
 
-                    std::string x = "";
-                    switch (kind) {
-                        case NullabilityKind::Unspecified:
-                            x = "unspecified";
-                            break;
-                        case NullabilityKind::NonNull:
-                            x = "nonnull";
-                            break;
-                        case NullabilityKind::Nullable:
-                            x = "nullable";
-                            break;
+                        std::string x = "";
+                        switch (kind) {
+                            case NullabilityKind::Unspecified:
+                                x = "unspecified";
+                                break;
+                            case NullabilityKind::NonNull:
+                                x = "nonnull";
+                                break;
+                            case NullabilityKind::Nullable:
+                                x = "nullable";
+                                break;
+                        }
+                        
+                        DiagnosticsEngine &engine = Context.getDiagnostics();
+                        unsigned id = engine.getCustomDiagID(DiagnosticsEngine::Remark, "Variable nullability: %0");
+                        engine.Report(decl->getLocation(), id) << x;
                     }
-                    
-                    DiagnosticsEngine &engine = Context.getDiagnostics();
-                    unsigned id = engine.getCustomDiagID(DiagnosticsEngine::Remark, "Variable nullability: %0");
-                    engine.Report(decl->getLocation(), id) << x;
                 }
 
                 QualType returnType = methodDecl->getReturnType();
@@ -507,18 +516,26 @@ public:
 
 private:
     ASTContext &Context;
+    bool Debug;
 };
 
 class NullCheckConsumer : public ASTConsumer {
 public:
+    explicit NullCheckConsumer(bool debug) : ASTConsumer(), Debug(debug) {
+        
+    }
+    
     virtual void HandleTranslationUnit(clang::ASTContext &Context) {
-        NullCheckVisitor visitor(Context);
+        NullCheckVisitor visitor(Context, Debug);
         visitor.TraverseDecl(Context.getTranslationUnitDecl());
     }
+    
+private:
+    bool Debug;
 };
 
 std::unique_ptr<clang::ASTConsumer> NullCheckAction::CreateASTConsumer(CompilerInstance &Compiler, StringRef InFile) {
-    return std::unique_ptr<ASTConsumer>(new NullCheckConsumer);
+    return std::unique_ptr<ASTConsumer>(new NullCheckConsumer(Debug));
 }
 
 
