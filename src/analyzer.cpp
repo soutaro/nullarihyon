@@ -30,7 +30,7 @@ public:
         if (llvm::dyn_cast<StringLiteral>(expr)) return NullabilityKind::NonNull;
         if (llvm::dyn_cast<ObjCBoolLiteralExpr>(expr)) return NullabilityKind::NonNull;
         if (llvm::dyn_cast<UnaryOperator>(expr)) return NullabilityKind::NonNull;
-
+        
         const Type *type = expr->getType().getTypePtrOrNull();
         if (type && type->isObjectType()) {
             std::cerr << "VisitExpr; unknown expr" << std::endl;
@@ -259,7 +259,7 @@ public:
                 NullabilityKind varKind = NullabilityCalculator.VisitVarDecl(vd);
 
                 Expr *init = vd->getInit();
-                if (init) {
+                if (init && llvm::dyn_cast<ImplicitValueInitExpr>(init) == nullptr) {
                     if (!isNullabilityCompatible(varKind, calculateNullability(init))) {
                         WarningReport(init->getExprLoc()) << "Nullability mismatch on variable declaration";
                     }
@@ -412,7 +412,7 @@ public:
                         Optional<NullabilityKind> kind = type->getNullability(Context);
                         Expr *init = vd->getInit();
 
-                        if (init && !kind.hasValue()) {
+                        if (init && llvm::dyn_cast<ImplicitValueInitExpr>(init) == nullptr && !kind.hasValue()) {
                             Env[vd] = Calculator.Visit(init);
                         } else {
                             Env[vd] = kind.getValueOr(NullabilityKind::Unspecified);
