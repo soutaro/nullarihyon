@@ -6,6 +6,9 @@ __attribute__((objc_root_class))
 
 @end
 
+@protocol NSObjectProtocol
+@end
+
 @interface NSString : NSObject
 @end
 

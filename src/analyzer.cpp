@@ -345,10 +345,16 @@ public:
         if (subExprType && type) {
             Optional<NullabilityKind> subExprKind = subExprType->getNullability(Context);
             Optional<NullabilityKind> exprKind = type->getNullability(Context);
-
-            if (subExprKind.getValueOr(NullabilityKind::Unspecified) != exprKind.getValueOr(NullabilityKind::Unspecified)) {
-                if (subExpr->getType().getDesugaredType(Context) != expr->getType().getDesugaredType(Context)) {
-                    WarningReport(expr->getExprLoc()) << "Cast on nullability cannot change base type";
+            
+            if (exprKind.getValueOr(NullabilityKind::Unspecified) == NullabilityKind::NonNull) {
+                if (subExprKind.getValueOr(NullabilityKind::Unspecified) != NullabilityKind::NonNull) {
+                    if (subExpr->getType().getDesugaredType(Context) != expr->getType().getDesugaredType(Context)) {
+                        if (subExprType->isObjCIdType() || subExprType->isObjCQualifiedIdType()) {
+                            // cast from id is okay
+                        } else {
+                            WarningReport(expr->getExprLoc()) << "Cast on nullability cannot change base type";
+                        }
+                    }
                 }
             }
         }

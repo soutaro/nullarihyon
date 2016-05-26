@@ -7,24 +7,31 @@
 
 @implementation Test10
 
-- (void)test {
-  NSString * _Nullable x = @"non null value";
-  NSString * _Nonnull y = (NSString * _Nonnull)x;  // ok
-  NSNumber * _Nonnull z = (NSNumber * _Nonnull)x;  // expected-warning{{Cast on nullability cannot change base type}}
-  NSObject * _Nonnull o = (NSObject * _Nonnull)x;  // expected-warning{{Cast on nullability cannot change base type}}
+- (void)test1 {
+  // If cast does not change nullability, it behaves as Objective-C native semantics.
+
+  NSString * _Nullable x;
+  NSString *a;
+  NSNumber *b;
+  NSNumber *c;
+
+  a = (NSString * _Nonnull)x; // ok
+  b = (NSNumber *)x; // ok
+  c = (NSNumber * _Nonnull)x; // expected-warning{{Cast on nullability cannot change base type}}
 }
 
 - (void)test2 {
-  // If cast does not change nullability, it behaves as Objective-C native semantics.
+  id x; // expected-note{{Variable nullability: unspecified}}
+  NSString *a; // expected-note{{Variable nullability: unspecified}}
 
-  NSString *x = @""; // expected-note{{Variable nullability: nonnull}}
-  NSNumber *xO = (NSNumber *)x; // expected-note{{Variable nullability: unspecified}}
+  a = (NSString * _Nonnull)x; // ok
+}
 
-  NSString * _Nullable y = @"";  // expected-note{{Variable nullability: nullable}}
-  NSNumber * _Nullable yO = (NSNumber * _Nullable)y;  // expected-note{{Variable nullability: nullable}}
+- (void)test3 {
+  id<NSObjectProtocol> x; // expected-note{{Variable nullability: unspecified}}
+  NSString *a; // expected-note{{Variable nullability: unspecified}}
 
-  NSString * _Nonnull z = @"";  // expected-note{{Variable nullability: nonnull}}
-  NSNumber * _Nonnull zO = (NSNumber * _Nonnull)z; // expected-note{{Variable nullability: nonnull}}
+  a = (NSString * _Nonnull)x;
 }
 
 @end
