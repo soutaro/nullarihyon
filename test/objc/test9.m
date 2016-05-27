@@ -17,8 +17,8 @@
   NSString *z = y; // expected-remark{{Variable nullability: nullable}}
 
   [self argumentIsNonnull:x]; // ok
-  [self argumentIsNonnull:y]; // expected-warning{{Nullability mismatch on method call argument}}
-  [self argumentIsNonnull:z]; // expected-warning{{Nullability mismatch on method call argument}}
+  [self argumentIsNonnull:y]; // expected-warning{{-[Test argumentIsNonnull:] expects nonnull argument}}
+  [self argumentIsNonnull:z]; // expected-warning{{-[Test argumentIsNonnull:] expects nonnull argument}}
 }
 
 @end

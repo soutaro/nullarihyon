@@ -12,7 +12,7 @@
 - (void)test {
   NSString * _Nullable x;
 
-  self.nonnullString = x; // expected-warning{{Nullability mismatch on method call argument}}
+  self.nonnullString = x; // expected-warning{{-[TestClass setNonnullString:] expects nonnull argument}}
   self.nullableString = x; // no warning
 }
 

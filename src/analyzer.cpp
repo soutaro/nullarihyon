@@ -304,7 +304,19 @@ public:
                 NullabilityKind argNullability = calculateNullability(arg);
 
                 if (!isNullabilityCompatible(paramQType, argNullability)) {
-                    WarningReport(arg->getExprLoc()) << "Nullability mismatch on method call argument";
+                    std::string interfaceName = decl->getClassInterface()->getNameAsString();
+                    std::string selector = decl->getSelector().getAsString();
+                    std::string kind;
+                    ObjCMessageExpr::ReceiverKind receiverKind = callExpr->getReceiverKind();
+                    if (receiverKind == ObjCMessageExpr::ReceiverKind::Instance || receiverKind == ObjCMessageExpr::ReceiverKind::SuperInstance) {
+                        kind = "-";
+                    } else {
+                        kind = "+";
+                    }
+                    
+                    std::string message = kind + "[" + interfaceName + " " +selector + "] expects nonnull argument";
+
+                    WarningReport(arg->getExprLoc()) << message;
                 }
 
                 index++;
