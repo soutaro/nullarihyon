@@ -243,6 +243,14 @@ public:
         }
         return NullabilityKind::Unspecified;
     }
+    
+    NullabilityKindEnvironment &getEnvironment() {
+        return Env;
+    }
+    
+    bool isDebug() {
+        return Debug;
+    }
 
 private:
     ASTContext &Context;
@@ -346,6 +354,37 @@ public:
         }
 
         return true;
+    }
+    
+    bool TraverseIfStmt(IfStmt *ifStmt) {
+        Expr *condition = ifStmt->getCond();
+        Stmt *thenStmt = ifStmt->getThen();
+        Stmt *elseStmt = ifStmt->getElse();
+        
+        DeclRefExpr *refExpr = llvm::dyn_cast<DeclRefExpr>(condition->IgnoreParenImpCasts());
+        if (refExpr) {
+            VarDecl *varDecl = llvm::dyn_cast<VarDecl>(refExpr->getDecl());
+            if (varDecl) {
+                const Type *type = varDecl->getType().getTypePtrOrNull();
+                NullabilityKindEnvironment environment = NullabilityCalculator.getEnvironment();
+                if (type && type->isObjectType()) {
+                    environment[varDecl] = NullabilityKind::NonNull;
+                }
+                ExprNullabilityCalculator calculator(Context, environment, NullabilityCalculator.isDebug());
+                MethodBodyChecker checker = MethodBodyChecker(Context, ReturnType, calculator);
+                checker.TraverseStmt(thenStmt);
+            } else {
+                this->TraverseStmt(thenStmt);
+            }
+            
+            if (elseStmt) {
+                this->TraverseStmt(elseStmt);
+            }
+            
+            return true;
+        } else {
+            return RecursiveASTVisitor::TraverseIfStmt(ifStmt);
+        }
     }
 
     bool VisitCStyleCastExpr(CStyleCastExpr *expr) {
