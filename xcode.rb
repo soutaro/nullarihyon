@@ -7,17 +7,20 @@ require "pp"
 require "open3"
 require "xcodeproj"
 require "strscan"
+require "thread"
 
 $Verbose = false
 $Config = Pathname(".nullabilint.yml")
 $Executable = "nullabilint-core"
 $AdditionalOptions = []
+$Jobs = 4
 
 OptionParser.new do |opt|
   opt.on("-v", "--verbose") { $Verbose = true }
   opt.on("-c CONFIG", "--config=CONFIG") {|path| $Config = Pathname(path) }
   opt.on("-e PATH", "--executable=CONFIG") {|executable| $Executable = executable }
   opt.on("-X OPTION") {|option| $AdditionalOptions << option }
+  opt.on("-j JOBS") {|jobs| $Jobs = jobs.to_i }
 end.parse!(ARGV)
 
 project_path = ENV["PROJECT_FILE_PATH"]
@@ -54,9 +57,6 @@ if objects_dir.directory?
 
   if timestamp_file.file?
     updated_objects = objects_dir.children.select do |object_path|
-      p object_path
-      p object_path.extname
-      p object_path.mtime
       object_path.file? && object_path.extname == ".o" && object_path.mtime > timestamp_file.mtime
     end
 
@@ -78,7 +78,39 @@ config = $Config.file? ? YAML.load($Config.open) : {}
 
 all_options = (config[:commandline_options] || []) + options + $AdditionalOptions
 
-command_line = [$Executable] + source_files.map {|path| path.to_s } + ["--"] + all_options
-puts command_line.join(" ")
-system *command_line
+input_queue = Queue.new
+output_queue = Queue.new
+
+source_files.each do |path|
+  input_queue << path
+end
+
+threads = $Jobs.times.map {
+  input_queue << nil
+
+  Thread.new do
+    while path = input_queue.pop
+      command_line = [$Executable, path.to_s, "--"] + all_options
+      output_queue << command_line.join(" ")
+
+      output, status = Open3.capture2e(*command_line)
+
+      output_queue << output
+    end
+  end
+}
+
+output_thread = Thread.new do
+  while output = output_queue.pop
+    if output == :end
+      break
+    end
+
+    puts output
+  end
+end
+
+threads.each {|t| t.join }
+output_queue << :end
+output_thread.join
 
