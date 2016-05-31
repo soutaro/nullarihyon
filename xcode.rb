@@ -13,7 +13,7 @@ $Verbose = false
 $Config = Pathname("null.yml")
 $Executable = "nullarihyon-core"
 $AdditionalOptions = []
-$Jobs = 4
+$Jobs = [1, `sysctl -n hw.ncpu`.chomp.to_i - 2].max
 
 OptionParser.new do |opt|
   opt.on("-v", "--verbose") { $Verbose = true }
