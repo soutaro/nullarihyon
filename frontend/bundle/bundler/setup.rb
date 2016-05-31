@@ -12,4 +12,5 @@ $:.unshift "#{path}/../#{ruby_engine}/#{ruby_version}/gems/activesupport-4.2.6/l
 $:.unshift "#{path}/"
 $:.unshift "#{path}/../#{ruby_engine}/#{ruby_version}/gems/claide-1.0.0/lib"
 $:.unshift "#{path}/../#{ruby_engine}/#{ruby_version}/gems/colored-1.2/lib"
+$:.unshift "#{path}/../#{ruby_engine}/#{ruby_version}/gems/thor-0.19.1/lib"
 $:.unshift "#{path}/../#{ruby_engine}/#{ruby_version}/gems/xcodeproj-1.0.0/lib"
