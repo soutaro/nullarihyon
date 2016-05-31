@@ -10,8 +10,8 @@ require "strscan"
 require "thread"
 
 $Verbose = false
-$Config = Pathname(".nullabilint.yml")
-$Executable = "nullabilint-core"
+$Config = Pathname("null.yml")
+$Executable = "nullarihyon-core"
 $AdditionalOptions = []
 $Jobs = 4
 
@@ -53,7 +53,7 @@ options.push "-I"
 options.push objects_dir.to_s
 
 if objects_dir.directory?
-  timestamp_file = objects_dir + "nullabilint"
+  timestamp_file = objects_dir + "nullarihyon"
 
   if timestamp_file.file?
     updated_objects = objects_dir.children.select do |object_path|

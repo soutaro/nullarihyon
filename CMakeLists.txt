@@ -1,5 +1,5 @@
 cmake_minimum_required (VERSION 2.6)
-project (Nullabilint)
+project (Nullarihyon)
 
 if (NOT LLVM_ROOT)
   message (FATAL_ERROR "Specify location of llvm from command line: -DLLVM_ROOT=/opt/local/clang+llvm-3.8.0-x86_64-apple-darwin")

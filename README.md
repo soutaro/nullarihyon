@@ -1,6 +1,39 @@
-# nullabilint
+# Nullarihyon
 
-This is experimental tool to check nullability constraints in Objective-C implementation.
+Check nullability consistency in your Objective-C implementation.
+
+Recent Objective-C allows programmers to annotate variabes and methods with nullability, like `nonnull`, `_Nonnull`, `nullable`, or `_Nullable`.
+However the compiler does not check if they are implemented correctly or not.
+
+This tool checks nullability consistency on:
+
+* Assignment on variables
+* Method call
+* Return
+
+It helps you to notice nullability mismatch and prevent from having unexpected `nil` in your code.
+
+## Example
+
+The following is an example of programs and warnings.
+
+```objc
+NS_ASSUME_NONNULL_BEGIN
+
+@implementation SomeClass
+
+- (void)example {
+  NSNumber * _Nullable a = @123;
+  NSString * _Nonnull b = [self doSomethingWithString:a]; // Warning: parameter of doSomethingWithString: is _Nonnull
+}
+
+- (NSString *)doSomethingWithString:(NSNumber *)x {
+  NSString * _Nullable y = x.stringValue;
+  return y; // Warning: Returnes _Nullable but the method declares to be _Nonnull
+}
+
+NS_ASSUME_NONNULL_END
+```
 
 # Setup
 
@@ -32,7 +65,7 @@ There are two tools to run the program, `frontend.rb` and `xcode.rb`.
 
 ## Configuration
 
-Make `.nullabilint.yml` file for configuration.
+Make `null.yml` file for configuration.
 The configuration contains commandline options for compiler, including header file search paths and some options.
 The file is used both `frontend.rb` and `xcode.rb`.
 
@@ -106,13 +139,13 @@ For iOS programs(using `UIView`), you should use ones of `iPhoneSimulator.platfo
 Try the tool with `frontend.rb`:
 
 ```
-$ ruby frontend.rb -e ./nullabilint-core objc/test.m
+$ ruby frontend.rb -e ./nullarihyon-core objc/test.m
 ```
 
 You can pass additional configuration for compiler with `-X` option.
 
 ```
-$ ruby frontend.rb -e ./nullabilint-core -X-I -X/usr/include objc/test.m
+$ ruby frontend.rb -e ./nullarihyon-core -X-I -X/usr/include objc/test.m
 ```
 
 ## xcode.rb
@@ -123,7 +156,7 @@ The script is expected to be invoked during Xcode build session.
 * It reads `.xcodeproj` from env var and find `.m` files
 * It reads some compiler settings from env var
 
-Add `.nullabilint.yml` in your source code directory. A typical configuration would be like:
+Add `null.yml` in your source code directory. A typical configuration would be like:
 
 ```
 :commandline_options:
@@ -157,7 +190,7 @@ Most of `.framework` pods are automatically imported by the script.
 Add new `Run Script` phase in your Xcode project and write something like:
 
 ```
-/usr/bin/ruby /Users/soutaro/src/nullabilint/xcode.rb -e /Users/soutaro/src/nullabilint/nullabilint-core
+/usr/bin/ruby /Users/soutaro/src/nullarihyon/xcode.rb -e /Users/soutaro/src/nullarihyon/nullarihyon-core
 ```
 
 The tools runs after each build, and run check for updated source code.

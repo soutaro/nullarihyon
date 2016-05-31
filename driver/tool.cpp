@@ -10,13 +10,13 @@ using namespace llvm;
 using namespace clang;
 using namespace clang::tooling;
 
-static llvm::cl::OptionCategory NullabilintCategory("nullabilint-core options");
+static llvm::cl::OptionCategory NullarihyonCategory("nullarihyon-core options");
 
 static cl::extrahelp CommonHelp(CommonOptionsParser::HelpMessage);
 
 static cl::opt<bool> DebugOption("debug",
                                  cl::desc("Enable debug mode (reports more verbosely)"),
-                                 cl::cat(NullabilintCategory));
+                                 cl::cat(NullarihyonCategory));
 
 class NullCheckActionFactory : public FrontendActionFactory {
 public:
@@ -33,7 +33,7 @@ private:
 };
 
 int main(int argc, const char **argv) {
-    CommonOptionsParser OptionsParser(argc, argv, NullabilintCategory);
+    CommonOptionsParser OptionsParser(argc, argv, NullarihyonCategory);
     ClangTool Tool(OptionsParser.getCompilations(), OptionsParser.getSourcePathList());
     
     auto action = new NullCheckAction;

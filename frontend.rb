@@ -5,8 +5,8 @@ require "pp"
 require "open3"
 
 $Verbose = false
-$Config = Pathname(".nullabilint.yml")
-$Executable = "nullabilint-core"
+$Config = Pathname("null.yml")
+$Executable = "nullarihyon-core"
 
 additional_options = []
 
