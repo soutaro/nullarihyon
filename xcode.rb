@@ -40,9 +40,15 @@ unless target
 end
 
 options = []
-
 options.push "-F"
 options.push ENV["CONFIGURATION_BUILD_DIR"]
+
+Pathname(ENV["CONFIGURATION_BUILD_DIR"]).children.each do |path|
+  if path.directory? && path.extname == ".framework"
+    options << "-iquote"
+    options << (path + "Headers").to_s
+  end
+end
 
 source_files = target.source_build_phase.files.map {|file| file.file_ref.real_path }.select {|path| path.extname == ".m" }
 
