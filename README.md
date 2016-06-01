@@ -2,16 +2,16 @@
 
 Check nullability consistency in your Objective-C implementation.
 
-Recent Objective-C allows programmers to annotate variables and methods with nullability, like `nonnull`, `_Nonnull`, `nullable`, or `_Nullable`.
+Recent Objective-C allows programmers to annotate variables and methods with nullability, as `nonnull` (`_Nonnull`) and `nullable` (`_Nullable`).
 However the compiler does not check if they are implemented correctly or not.
 
 This tool checks nullability consistency on:
 
 * Assignment on variables
-* Method call
-* Return
+* Method calls
+* Returns
 
-It helps you to notice nullability mismatch and prevent from having unexpected `nil` in your code.
+It helps you to find out nullability mismatch and prevent from having unexpected `nil` in your code.
 
 ## Example
 
@@ -29,7 +29,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (NSString *)doSomethingWithString:(NSNumber *)x {
   NSString * _Nullable y = x.stringValue;
-  return y; // Warning: Returns _Nullable but the method declares to be _Nonnull
+  return y; // Warning: returning _Nonnull value is expected
 }
 
 NS_ASSUME_NONNULL_END
@@ -37,7 +37,7 @@ NS_ASSUME_NONNULL_END
 
 # Install
 
-Install nullarihyon via brew tap.
+Install via brew tap.
 
 ```
 $ brew tap soutaro/nullarihyon
@@ -54,10 +54,16 @@ $ brew install nullarihyon
 $ nullarihyon check sample.m
 ```
 
-You may have to specify `--sdk` option for `UIKit` classes or `AppKit` classes.
+You may have to specify `--sdk` option for `Foundation`, `UIKit`, or `AppKit` classes.
 
 * For iOS apps try with `--sdk iphonesimulator`
 * For Mac apps try with `--sdk macosx`
+
+You can find available options for `--sdk` by
+
+```
+$ nullarihyon help check
+```
 
 ## From Xcode
 
@@ -70,7 +76,7 @@ if which nullarihyon >/dev/null; then
 fi
 ```
 
-Run build and you will see so many warnings ;-)
+Run build from Xcode and you will see tons of warnings ;-)
 Thousand of warnings would not make you feel happy; try `--only-latest` option if you like.
 
 ```
@@ -78,7 +84,7 @@ nullarihyon xcode --only-latest
 ```
 
 With `--only-latest` option, Xcode warnings will be flushed every time you run build.
-And warnings on actually compiled files between the build will be shown.
+Warnings for files which is compiled during last build will be shown.
 
 # Fixing Warnings
 
@@ -99,6 +105,22 @@ NSString * _Nonnull y = x;
 NSString * _Nonnull z = (NSString * _Nonnull)x;
 ```
 
+The tools makes you writing many casts.
+To prevent from writing wrong casts, if the cast changes nullability type cannot be changed.
+
+```
+NSObject * _Nullable x;
+NSObject * _Nonnull y = (NSObject * _Nonnull)x;   // This is ok
+NSString * _Nonnull z = (NSString * _Nonnull)x;   // This still reports warning
+```
+
+Casting from `id` is still allowed.
+
+```
+id _Nullable x;
+NSString * _Nonnull y = (NSString * _Nonnull)x;   // This is ok because x is id
+```
+
 ## Use `?:` and give default value
 
 `?:` operator is supported.
@@ -106,7 +128,7 @@ NSString * _Nonnull z = (NSString * _Nonnull)x;
 ```objc
 NSString * _Nullable x;
 
-NSString * _Nonnulle y = x ?: @"";  // This is okay
+NSString * _Nonnull y = x ?: @"";  // This is okay
 ```
 
 ## Declare variable `_Nonnull`
@@ -119,8 +141,8 @@ NSString * _Nonnull x;
 NSString * y = x;  // This is _Nonnull because initial value is _Nonnull
 ```
 
-When you declare variable without initial value, the nullability is `_Nullable`.
-This rule makes a programming style discouraged.
+When you declare variable without initial value, its nullability is `_Nullable`.
+This rule discourages the following programming style.
 
 ```objc
 NSString *x = nil;
@@ -137,7 +159,7 @@ NSString * _Nonnull y = x;  // x cannot be nil here
 Clearly the value of `x` after `if` statement cannot be `nil`.
 However, Nullarihyon reports warning on the assignment to `y` since `x` is `_Nullable` because of its declaration.
 
-For this, annotate variable declaration explicitly, and stop assigning `nil` explicitly.
+For this, annotate variable declaration explicitly, and stop assigning `nil`.
 
 ```objc
 NSString * _Nonnull x;
@@ -152,7 +174,7 @@ NSString * _Nonnull y = x;
 ```
 
 Nothing will go wrong.
-Variable without initial value will be `nil` anyway, by if you enables ARC.
+Variable without initial value will be `nil` anyway, if you enables ARC.
 
 ## Assign the `_Nullable` value to variable, and test by `if`
 
@@ -169,7 +191,15 @@ if (x) {
 ```
 
 The condition clause of `if` have to be exactly one variable reference.
-Any other forms including conjunction `&&` and property reference are not supported.
+Any other forms including conjunction (`&&`) and property reference are not supported.
+
+# Assumptions
+
+There are a few assumptions introduced by Nullarihyon.
+
+* `self` is `_Nonnull`
+* Loop variables are `_Nonnull`
+* `alloc` and `init` returns `_Nonnull` if it declares to return `_Nullable`
 
 # Limitation
 
@@ -190,5 +220,4 @@ If *expected* type has `_Nonnull` attribute, and *actual* type does not have, th
 ## Known Issue
 
 * It does not check params and return types for block types (block type itself is checked)
-* It checks casts changing nullability, but is not working correctly...
-
+* `[self alloc]` does not return `instancetype` but `id` (analysis by Clang compiler)
