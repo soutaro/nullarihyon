@@ -105,13 +105,13 @@ NSString * _Nonnull y = x;
 NSString * _Nonnull z = (NSString * _Nonnull)x;
 ```
 
-The tools makes you writing many casts.
-To prevent from writing wrong casts, if the cast changes nullability type cannot be changed.
+The tool makes you write many casts.
+To prevent from writing wrong casts, Nullarihyon reports warning if the cast changes both nullability and type.
 
 ```
 NSObject * _Nullable x;
 NSObject * _Nonnull y = (NSObject * _Nonnull)x;   // This is ok
-NSString * _Nonnull z = (NSString * _Nonnull)x;   // This still reports warning
+NSString * _Nonnull z = (NSString * _Nonnull)x;   // This reports warning
 ```
 
 Casting from `id` is still allowed.
