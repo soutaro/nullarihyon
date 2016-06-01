@@ -1,0 +1,17 @@
+PODS:
+  - CrittercismSDK (5.5.5)
+  - GCDWebServer (3.3.2):
+    - GCDWebServer/Core (= 3.3.2)
+  - GCDWebServer/Core (3.3.2)
+
+DEPENDENCIES:
+  - CrittercismSDK
+  - GCDWebServer
+
+SPEC CHECKSUMS:
+  CrittercismSDK: 70f261913b23c5018f7e695d8abe287ee7061ad2
+  GCDWebServer: 2a375ec42839a41d7187d04e5b688d32fa5c4cd5
+
+PODFILE CHECKSUM: c7827521b563475365fceb3a4630404386811a68
+
+COCOAPODS: 1.0.0
