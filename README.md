@@ -199,7 +199,7 @@ There are a few assumptions introduced by Nullarihyon.
 
 * `self` is `_Nonnull`
 * Loop variables are `_Nonnull`
-* `alloc` and `init` returns `_Nonnull` if it declares to return `_Nullable`
+* `alloc` and `init` returns `_Nonnull` if it does not declare to return `_Nullable`
 
 # Limitation
 
