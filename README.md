@@ -2,7 +2,7 @@
 
 Check nullability consistency in your Objective-C implementation.
 
-Recent Objective-C allows programmers to annotate variabes and methods with nullability, like `nonnull`, `_Nonnull`, `nullable`, or `_Nullable`.
+Recent Objective-C allows programmers to annotate variables and methods with nullability, like `nonnull`, `_Nonnull`, `nullable`, or `_Nullable`.
 However the compiler does not check if they are implemented correctly or not.
 
 This tool checks nullability consistency on:
@@ -29,179 +29,152 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (NSString *)doSomethingWithString:(NSNumber *)x {
   NSString * _Nullable y = x.stringValue;
-  return y; // Warning: Returnes _Nullable but the method declares to be _Nonnull
+  return y; // Warning: Returns _Nullable but the method declares to be _Nonnull
 }
 
 NS_ASSUME_NONNULL_END
 ```
 
-# Setup
+# Install
 
-## Prepare LLVM & Clang
-
-You need LLVM & Clang. I develop with HEAD, but this is compatible with 3.8.
-
-### Using Binary Distribution
-
-Download binary distribution from LLVM webpage.
-
-* http://llvm.org/releases/download.html
-
-3.8.0 is fine.
-
-Extract the archive.
-
-### Build
-
-In git repo directory, run `cmake` to build.
+Install nullarihyon via brew tap.
 
 ```
-$ cmake -DLLVM_ROOT=~/opt/clang+llvm-3.8.0-x86_64-apple-darwin --build .
+$ brew tap soutaro/homebrew-nullarihyon
+$ brew install nullarihyon
 ```
 
-There are two tools to run the program, `frontend.rb` and `xcode.rb`.
+# Getting Started
 
-`frontend.rb` would be the good one to try. `xcode.rb` is for Xcode integration.
+## From command line
 
-## Configuration
-
-Make `null.yml` file for configuration.
-The configuration contains commandline options for compiler, including header file search paths and some options.
-The file is used both `frontend.rb` and `xcode.rb`.
-
-Typical configuration for OS X programs should be like the following:
-
-```yaml
-:commandline_options:
-  - -x
-  - objective-c
-  - -std=gnu99
-  - -fobjc-arc
-  - -fobjc-exceptions
-  - -fmodules
-  - -fasm-blocks
-  - -fstrict-aliasing
-  - -resource-dir
-  - /opt/clang+llvm-3.8.0-x86_64-apple-darwin/lib/clang/3.8.0
-  - -isysroot
-  - /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.11.sdk
-```
-
-For iOS programs, something like the following should work:
-
-```yaml
-:commandline_options:
-  - -x
-  - objective-c
-  - -std=gnu99
-  - -fobjc-arc
-  - -fobjc-exceptions
-  - -fmodules
-  - -fasm-blocks
-  - -fstrict-aliasing
-  - -resource-dir
-  - /opt/clang+llvm-3.8.0-x86_64-apple-darwin/lib/clang/3.8.0
-  - -isysroot
-  - /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator9.3.sdk
-```
-
-The main difference is path to SDK.
-
-### -resource-dir
-
-`-resource-dir` is directory for headers included in compiler.
-Specify path for headers like `float.h`.
-
-If you use binary distribution, `/path/to/llvm/dir/lib/clang/3.8.0` is fine.
-If you cannot find the path, try to find `float.h`.
+`nullarihyon check` command allows checking single `.m` file.
 
 ```
-$ find . -name float.h
-/usr/local/clang+llvm-3.8.0-x86_64-apple-darwin/lib/clang/3.8.0/include/float.h
+$ nullarihyon check sample.m
 ```
 
-If `float.h` is in `/usr/local/clang+llvm-3.8.0-x86_64-apple-darwin/lib/clang/3.8.0/include`, 
-`/usr/local/clang+llvm-3.8.0-x86_64-apple-darwin/lib/clang/3.8.0` is the path for `-resource-dir`.
+You may have to specify `--sdk` option for `UIKit` classes or `AppKit` classes.
 
-Apple LLVM is in something like `/Application/Xcode/Contents/Developer/Toolchains/XcodeDfault.xtoolchain/usr/lib/clang/7.3.0`.
-This is one of Xcode 7.3, but the files in the directory is too old for Clang 3.8.0.
-You cannot use the files.
+* For iOS apps try with `--sdk iphonesimulator`
+* For Mac apps try with `--sdk macosx`
 
-### -isysroot
+## From Xcode
 
-`-isysroot` is for header files for SDK like `UIKit/UIKit.h`.
-
-For Mac OS programs(using `NSView`), you should use ones of `MacOSX.platform`.
-For iOS programs(using `UIView`), you should use ones of `iPhoneSimulator.platform`.
-
-## frontend.rb
-
-Try the tool with `frontend.rb`:
+`nullarihyon xcode` command is for Xcode integration.
+Add `Run Script Phase` with:
 
 ```
-$ ruby frontend.rb -e ./nullarihyon-core objc/test.m
+if which nullarihyon >/dev/null; then
+  nullarihyon xcode
+fi
 ```
 
-You can pass additional configuration for compiler with `-X` option.
+Run build and you will see so many warnings ;-)
+Thousand of warnings would not make you feel happy; try `--only-latest` option if you like.
 
 ```
-$ ruby frontend.rb -e ./nullarihyon-core -X-I -X/usr/include objc/test.m
+nullarihyon xcode --only-latest
 ```
 
-## xcode.rb
+With `--only-latest` option, Xcode warnings will be flushed every time you run build.
+And warnings on actually compiled files between the build will be shown.
 
-`xcode.rb` is for Xcode integration.
-The script is expected to be invoked during Xcode build session.
+# Fixing Warnings
 
-* It reads `.xcodeproj` from env var and find `.m` files
-* It reads some compiler settings from env var
+To fix nullability warnings, there are things you can do.
 
-Add `null.yml` in your source code directory. A typical configuration would be like:
+## Add explicit cast
 
-```
-:commandline_options:
-  - -x
-  - objective-c
-  - -std=gnu99
-  - -fobjc-arc
-  - -fobjc-exceptions
-  - -fmodules
-  - -fasm-blocks
-  - -fstrict-aliasing
-  - -resource-dir
-  - /opt/clang+llvm-3.8.0-x86_64-apple-darwin/lib/clang/3.8.0
-  - -isysroot
-  - /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator9.3.sdk
-  - -isystem
-  - /Users/soutaro/src/ubiregi-client/Pods/Headers/Public
-  - -isystem
-  - /Users/soutaro/src/ubiregi-client/Pods/Headers/Public/AWSiOSSDKv2
-  - -isystem
-  - /Users/soutaro/src/ubiregi-client/Pods/Headers/Public/CrittercismSDK
-  - -isystem
-  - /Users/soutaro/src/ubiregi-client/Pods/Headers/Public/GoogleAnalytics
-  - -isystem
-  - /Users/soutaro/src/ubiregi-client/Pods/Headers/Public/Helpshift
+This is the last resort.
+When you are sure the value cannot be `nil`, add explicit cast.
+
+```objc
+NSString * _Nullable x = ...;
+
+// Warning here
+NSString * _Nonnull y = x;
+
+// Add explicit cast
+NSString * _Nonnull z = (NSString * _Nonnull)x;
 ```
 
-If you are using CocoaPods, some header directries should be explicitly added in the config file.
-Most of `.framework` pods are automatically imported by the script.
+## Use `?:` and give default value
 
-Add new `Run Script` phase in your Xcode project and write something like:
+`?:` operator is supported.
 
+```objc
+NSString * _Nullable x;
+
+NSString * _Nonnulle y = x ?: @"";  // This is okay
 ```
-/usr/bin/ruby /Users/soutaro/src/nullarihyon/xcode.rb -e /Users/soutaro/src/nullarihyon/nullarihyon-core
+
+## Declare variable `_Nonnull`
+
+Nullability of local variables declared with initial value will be propagated from the initial value.
+
+```objc
+NSString * _Nonnull x;
+
+NSString * y = x;  // This is _Nonnull because initial value is _Nonnull
 ```
 
-The tools runs after each build, and run check for updated source code.
+When you declare variable without initial value, the nullability is `_Nullable`.
+This rule makes a programming style discouraged.
 
-> The tools runs very slowly.
-> On my Mac Pro 2013, analysis of project with 500 source code takes ~15 mins.
-> Try with small project.
+```objc
+NSString *x = nil;
 
-### Restriction
+if (a == 1) {
+  x = @"one";
+} else {
+  x = @"other";
+}
+
+NSString * _Nonnull y = x;  // x cannot be nil here
+```
+
+Clearly the value of `x` after `if` statement cannot be `nil`.
+However, Nullarihyon reports warning on the assignment to `y` since `x` is `_Nullable` because of its declaration.
+
+For this, annotate variable declaration explicitly, and stop assigning `nil` explicitly.
+
+```objc
+NSString * _Nonnull x;
+
+if (a == 1) {
+  x = @"one";
+} else {
+  x = @"other";
+}
+
+NSString * _Nonnull y = x;
+```
+
+Nothing will go wrong.
+Variable without initial value will be `nil` anyway, by if you enables ARC.
+
+## Assign the `_Nullable` value to variable, and test by `if`
+
+Nullarihyon supports super simple form of flow-sensitive-type.
+
+When condition clause of `if` is a variable reference, the variable will be treated as `_Nonnull` in then clause.
+
+```objc
+NSString * _Nullable x;
+
+if (x) {
+  NSString * _Nonnull y = x;  // This is okay because x is tested by if
+}
+```
+
+The condition clause of `if` have to be exactly one variable reference.
+Any other forms including conjunction `&&` and property reference are not supported.
+
+# Limitation
 
 * It does not support prefix headers
+* It does not support per-file build setting in Xcode
 
 # Nullability Check
 
@@ -214,14 +187,8 @@ This tool checks nullability on:
 
 If *expected* type has `_Nonnull` attribute, and *actual* type does not have, the tool reports warnings.
 
-# Known Issue
+## Known Issue
 
 * It does not check params and return types for block types (block type itself is checked)
 * It checks casts changing nullability, but is not working correctly...
 
-# Future works
-
-* I'm planning to implement very simple *flow sensitive type*, for `if (x) { ... }` pattern.
-  In *then* clause, variable in condition can be treated as `_Nonnull`.
-* Performance improvement (it's too slow)
-* Setup improvement (should be made easier)
