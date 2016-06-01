@@ -40,7 +40,7 @@ NS_ASSUME_NONNULL_END
 Install nullarihyon via brew tap.
 
 ```
-$ brew tap soutaro/homebrew-nullarihyon
+$ brew tap soutaro/nullarihyon
 $ brew install nullarihyon
 ```
 
