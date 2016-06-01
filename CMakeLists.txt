@@ -41,6 +41,11 @@ if (NOT LLVM_CXX_FLAGS)
   )
 endif()
 
+if (NOT CLANG_COMPILER_LIB_PATH)
+  set (CLANG_COMPILER_LIB_PATH ${LLVM_ROOT}/lib/clang)
+  message (STATUS "Clang compiler libs are supporsed in ${CLANG_COMPILER_LIB_PATH}; you can overwrite from command line: -DCLANG_COMPILER_LIB_PATH")
+endif()
+
 # Remove unnecesary -isysroot from llvm-config --cxxflags
 string(REGEX REPLACE "-isysroot +[^ ]+ " "" LLVM_CXX_FLAGS ${LLVM_CXX_FLAGS})
 
@@ -85,9 +90,36 @@ add_definitions (-D_GNU_SOURCE -DHAVE_CLANG_CONFIG_H)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${LLVM_CXX_FLAGS}")
 
+# Version of this software
+set (NULL_VERSION 1.0.0)
+
+# Setup RPATH for installation
+SET(CMAKE_SKIP_BUILD_RPATH FALSE)
+SET(CMAKE_BUILD_WITH_INSTALL_RPATH FALSE)
+set (CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib/nullarihyon/${NULL_VERSION}")
+SET(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+
+# Add source code
 add_subdirectory (src)
 add_subdirectory (driver)
 
 enable_testing ()
 add_subdirectory (vendor/googletest)
 add_subdirectory (unittest)
+
+# Install frontend scripts
+install (DIRECTORY frontend/lib frontend/bundle DESTINATION lib/nullarihyon/${NULL_VERSION}/frontend)
+# Install analyzer command
+install (DIRECTORY ${CLANG_COMPILER_LIB_PATH} DESTINATION lib/nullarihyon/${NULL_VERSION})
+
+# Copy dynamic link libraries
+FOREACH (lib_path ${LLVM_LIB_PATHS})
+  get_filename_component(lib_path ${lib_path} ABSOLUTE)
+  file(GLOB dylibs ${lib_path}/*.dylib)
+  install (FILES ${dylibs} DESTINATION lib/nullarihyon/${NULL_VERSION})
+ENDFOREACH(lib_path)
+
+# Generate nullarihyon command ruby script
+set (INSTALL_LIBEXEC_PREFIX ${CMAKE_INSTALL_PREFIX}/libexec/nullarihyon/${NULL_VERSION})
+set (INSTALL_LIB_PREFIX ${CMAKE_INSTALL_PREFIX}/lib/nullarihyon/${NULL_VERSION})
+install(CODE "execute_process(COMMAND /usr/bin/ruby ${PROJECT_SOURCE_DIR}/frontend/bin/make_frontend.rb ${CMAKE_INSTALL_PREFIX}/bin ${INSTALL_LIBEXEC_PREFIX}/nullarihyon-core ${INSTALL_LIB_PREFIX}/clang ${INSTALL_LIB_PREFIX}/frontend)")
