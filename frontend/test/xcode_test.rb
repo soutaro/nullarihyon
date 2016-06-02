@@ -48,7 +48,7 @@ module Nullarihyon
     }
 
     let (:xcode) {
-      Xcode.new(@analyzer_path, @resource_dir_path, 1, env)
+      Xcode.new(@analyzer_path, @resource_dir_path, 1, false, env)
     }
 
     it "does something" do
