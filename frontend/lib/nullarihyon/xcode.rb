@@ -162,6 +162,8 @@ module Nullarihyon
     end
 
     def self.tokenize_command_line(line)
+      return [] unless line
+
       scanner = StringScanner.new(line)
 
       tokens = []

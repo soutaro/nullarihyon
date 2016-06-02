@@ -138,6 +138,11 @@ module Nullarihyon
       it "returns OTHER_CFLAGS from env" do
         assert_equal %w(-iquote /some/directory -isystem /another/directory), xcode.other_cflags
       end
+
+      it "returns empty array if OTHER_CFLAGS is missing in env" do
+        env.delete("OTHER_CFLAGS")
+        assert_equal [], xcode.other_cflags
+      end
     end
 
     describe "#arc_enabled?" do
@@ -159,6 +164,10 @@ module Nullarihyon
 
       it "splits quoted command line" do
         assert_equal ["hello world", "good morning"], Xcode.tokenize_command_line("\"hello world\" 'good morning'")
+      end
+
+      it "returns empty array when nil is given" do
+        assert_equal [], Xcode.tokenize_command_line(nil)
       end
     end
   end
