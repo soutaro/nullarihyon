@@ -11,7 +11,10 @@ __attribute__((objc_root_class))
 @protocol NSObjectProtocol
 @end
 
-@interface NSString : NSObject
+@protocol NSCopying
+@end
+
+@interface NSString : NSObject<NSCopying>
 @end
 
 @interface NSNumber : NSObject

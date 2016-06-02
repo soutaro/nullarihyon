@@ -367,6 +367,26 @@ public:
         
         return true;
     }
+    
+    bool VisitObjCDictionaryLiteral(ObjCDictionaryLiteral *literal) {
+        unsigned count = literal->getNumElements();
+        
+        for (unsigned index = 0; index < count; index++) {
+            auto element = literal->getKeyValueElement(index);
+            
+            auto keyKind = calculateNullability(element.Key);
+            if (keyKind != NullabilityKind::NonNull) {
+                WarningReport(element.Key->getExprLoc()) << "Dictionary key should be nonnull";
+            }
+            
+            auto valueKind = calculateNullability(element.Value);
+            if (valueKind != NullabilityKind::NonNull) {
+                WarningReport(element.Value->getExprLoc()) << "Dictionary value should be nonnull";
+            }
+        }
+        
+        return true;
+    }
 
     bool TraverseBlockExpr(BlockExpr *blockExpr) {
         const Type *type = blockExpr->getType().getTypePtr();
