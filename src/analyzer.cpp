@@ -352,6 +352,21 @@ public:
 
         return true;
     }
+    
+    bool VisitObjCArrayLiteral(ObjCArrayLiteral *literal) {
+        unsigned count = literal->getNumElements();
+
+        for (unsigned index = 0; index < count; index++) {
+            Expr *element = literal->getElement(index);
+            NullabilityKind elementKind = calculateNullability(element);
+            
+            if (elementKind != NullabilityKind::NonNull) {
+                WarningReport(element->getExprLoc()) << "Array element should be nonnull";
+            }
+        }
+        
+        return true;
+    }
 
     bool TraverseBlockExpr(BlockExpr *blockExpr) {
         const Type *type = blockExpr->getType().getTypePtr();

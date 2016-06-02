@@ -1,3 +1,5 @@
+typedef unsigned NSUInteger;
+
 __attribute__((objc_root_class))
 @interface NSObject
 
@@ -16,4 +18,6 @@ __attribute__((objc_root_class))
 @end
 
 @interface NSArray<Element> : NSObject
+
 @end
+
