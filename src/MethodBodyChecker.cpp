@@ -4,6 +4,65 @@
 
 using namespace clang;
 
+enum class NullabilityCompatibility : uint8_t {
+    Compatible = 0,
+    IncompatibleTopLevel,
+    IncompatibleNested
+};
+
+NullabilityCompatibility calculateNullabilityCompatibility(ASTContext &context, const Type *lhsType, NullabilityKind lhsKind, const Type *rhsType, NullabilityKind rhsKind) {
+    if (lhsKind == NullabilityKind::NonNull) {
+        if (rhsKind != NullabilityKind::NonNull) {
+            return NullabilityCompatibility::IncompatibleTopLevel;
+        }
+    }
+    
+    lhsType = lhsType->getUnqualifiedDesugaredType();
+    rhsType = rhsType->getUnqualifiedDesugaredType();
+    
+    if (lhsType->isBlockPointerType() && rhsType->isBlockPointerType()) {
+        const FunctionProtoType *lhsFuncType = llvm::dyn_cast<FunctionProtoType>(llvm::dyn_cast<BlockPointerType>(lhsType)->getPointeeType().IgnoreParens().getTypePtr());
+        const FunctionProtoType *rhsFuncType = llvm::dyn_cast<FunctionProtoType>(llvm::dyn_cast<BlockPointerType>(rhsType)->getPointeeType().IgnoreParens().getTypePtr());
+        
+        if (lhsFuncType && rhsFuncType) {
+            const Type *lhsRetType = lhsFuncType->getReturnType().getTypePtr();
+            const Type *rhsRetType = rhsFuncType->getReturnType().getTypePtr();
+            
+            // Covariant
+            if (calculateNullabilityCompatibility(context,
+                                                  lhsRetType, lhsRetType->getNullability(context).getValueOr(NullabilityKind::Nullable),
+                                                  rhsRetType, rhsRetType->getNullability(context).getValueOr(NullabilityKind::Nullable)) != NullabilityCompatibility::Compatible) {
+                return NullabilityCompatibility::IncompatibleNested;
+            }
+            
+            unsigned lhsNumParams = lhsFuncType->getNumParams();
+            unsigned rhsNumParams = rhsFuncType->getNumParams();
+            
+            if (lhsNumParams != rhsNumParams) {
+                return NullabilityCompatibility::IncompatibleNested;
+            }
+            
+            for (unsigned index = 0; index < lhsNumParams; index++) {
+                const Type * lhsParamType = lhsFuncType->getParamType(index).getTypePtr();
+                const Type * rhsParamType = rhsFuncType->getParamType(index).getTypePtr();
+                
+                // Contravariant
+                if (calculateNullabilityCompatibility(context,
+                                                      rhsParamType, rhsParamType->getNullability(context).getValueOr(NullabilityKind::Nullable),
+                                                      lhsParamType, lhsParamType->getNullability(context).getValueOr(NullabilityKind::Nullable)) != NullabilityCompatibility::Compatible) {
+                    return NullabilityCompatibility::IncompatibleNested;
+                }
+            }
+        }
+    }
+    
+    return NullabilityCompatibility::Compatible;
+}
+
+//bool isCompatibleType(ASTContext &context, const Type *lhsType, NullabilityKind lhsKind, const Type *rhsType, NullabilityKind rhsKind) {
+//    return calculateNullabilityCompatibility(context, lhsType, lhsKind, rhsType, rhsKind) == NullabilityCompatibility::Compatible;
+//}
+
 bool MethodBodyChecker::VisitDeclStmt(DeclStmt *decl) {
     DeclGroupRef group = decl->getDeclGroup();
     DeclGroupRef::iterator it;
@@ -14,8 +73,18 @@ bool MethodBodyChecker::VisitDeclStmt(DeclStmt *decl) {
             
             Expr *init = vd->getInit();
             if (init && llvm::dyn_cast<ImplicitValueInitExpr>(init) == nullptr) {
-                if (!isNullabilityCompatible(varKind, calculateNullability(init))) {
-                    WarningReport(init->getExprLoc()) << "Nullability mismatch on variable declaration";
+                NullabilityCompatibility compatibility = calculateNullabilityCompatibility(Context, vd->getType().getTypePtr(), varKind, init->getType().getTypePtr(), calculateNullability(init));
+                
+                switch (compatibility) {
+                    case NullabilityCompatibility::IncompatibleTopLevel:
+                        WarningReport(init->getExprLoc()) << "Nullability mismatch on variable declaration";
+                        break;
+                    case NullabilityCompatibility::IncompatibleNested:
+                        WarningReport(init->getExprLoc()) << "Nullability mismatch inside block type on variable declaration";
+                        break;
+                    case NullabilityCompatibility::Compatible:
+                        // ok
+                        break;
                 }
             }
         }
@@ -33,11 +102,13 @@ bool MethodBodyChecker::VisitObjCMessageExpr(ObjCMessageExpr *callExpr) {
         for (it = decl->param_begin(); it != decl->param_end(); it++) {
             ParmVarDecl *d = *it;
             QualType paramQType = d->getType();
+            NullabilityKind paramNullability = paramQType.getTypePtr()->getNullability(Context).getValueOr(NullabilityKind::Nullable);
             
             Expr *arg = callExpr->getArg(index);
             NullabilityKind argNullability = calculateNullability(arg);
             
-            if (!isNullabilityCompatible(paramQType, argNullability)) {
+            NullabilityCompatibility compatibility = calculateNullabilityCompatibility(Context, paramQType.getTypePtr(), paramNullability, arg->getType().getTypePtr(), argNullability);
+            if (compatibility != NullabilityCompatibility::Compatible) {
                 std::string interfaceName = decl->getClassInterface()->getNameAsString();
                 std::string selector = decl->getSelector().getAsString();
                 std::string kind;
@@ -48,7 +119,21 @@ bool MethodBodyChecker::VisitObjCMessageExpr(ObjCMessageExpr *callExpr) {
                     kind = "+";
                 }
                 
-                std::string message = kind + "[" + interfaceName + " " +selector + "] expects nonnull argument";
+                std::string name = kind + "[" + interfaceName + " " + selector + "]";
+
+                std::string message;
+                
+                switch (compatibility) {
+                    case NullabilityCompatibility::IncompatibleTopLevel:
+                        message = name + " expects nonnull argument";
+                        break;
+                    case NullabilityCompatibility::IncompatibleNested:
+                        message = "Argument does not have expected block type to " + name;
+                        break;
+                    case NullabilityCompatibility::Compatible:
+                        // ok
+                        break;
+                }
                 
                 WarningReport(arg->getExprLoc()) << message;
             }
@@ -68,8 +153,17 @@ bool MethodBodyChecker::VisitBinAssign(BinaryOperator *assign) {
         NullabilityKind lhsNullability = calculateNullability(lhs);
         NullabilityKind rhsNullability = calculateNullability(rhs);
         
-        if (!isNullabilityCompatible(lhsNullability, rhsNullability)) {
-            WarningReport(rhs->getExprLoc()) << "Nullability mismatch on assignment";
+        NullabilityCompatibility compatibility = calculateNullabilityCompatibility(Context, lhs->getType().getTypePtr(), lhsNullability, rhs->getType().getTypePtr(), rhsNullability);
+        switch (compatibility) {
+            case NullabilityCompatibility::IncompatibleTopLevel:
+                WarningReport(rhs->getExprLoc()) << "Nullability mismatch on assignment";
+                break;
+            case NullabilityCompatibility::IncompatibleNested:
+                WarningReport(rhs->getExprLoc()) << "Nullability mismatch inside block type on assignment";
+                break;
+            case NullabilityCompatibility::Compatible:
+                // ok
+                break;
         }
     }
     
@@ -79,7 +173,13 @@ bool MethodBodyChecker::VisitBinAssign(BinaryOperator *assign) {
 bool MethodBodyChecker::VisitReturnStmt(ReturnStmt *retStmt) {
     Expr *value = retStmt->getRetValue();
     if (value) {
-        if (!isNullabilityCompatible(CheckContext.getReturnType(), calculateNullability(value))) {
+        const Type *returnType = CheckContext.getReturnType().getTypePtr();
+        
+        const Type *valueType = value->getType().getTypePtr();
+        NullabilityKind valueKind = calculateNullability(value);
+        
+        NullabilityCompatibility compatibility = calculateNullabilityCompatibility(Context, returnType, returnType->getNullability(Context).getValueOr(NullabilityKind::Nullable), valueType, valueKind);
+        if (compatibility != NullabilityCompatibility::Compatible) {
             std::string className = CheckContext.getInterfaceDecl().getNameAsString();
             std::string methodName = CheckContext.getMethodDecl().getSelector().getAsString();
             std::string kind = CheckContext.getMethodDecl().isClassMethod() ? "+" : "-";
@@ -87,11 +187,27 @@ bool MethodBodyChecker::VisitReturnStmt(ReturnStmt *retStmt) {
             
             std::string message;
             
-            if (CheckContext.getBlockExpr()) {
-                message = "Block in " + name + " expects nonnull to return";
-            } else {
-                message = name + " expects nonnull to return";
+            switch (compatibility) {
+                case NullabilityCompatibility::IncompatibleTopLevel:
+                    if (CheckContext.getBlockExpr()) {
+                        message = "Block in " + name + " expects nonnull to return";
+                    } else {
+                        message = name + " expects nonnull to return";
+                    }
+                    break;
+                case NullabilityCompatibility::IncompatibleNested:
+                    if (CheckContext.getBlockExpr()) {
+                        message = "Does not return expected type for block in " + name;
+                    } else {
+                        message = "Does not return expected type for " + name;
+                    }
+                    break;
+                case NullabilityCompatibility::Compatible:
+                    // ok
+                    break;
             }
+            
+            
             
             WarningReport(value->getExprLoc()) << message;
         }

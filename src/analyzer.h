@@ -118,26 +118,6 @@ protected:
     NullabilityKind calculateNullability(Expr *expr) {
         return NullabilityCalculator.Visit(expr->IgnoreParenImpCasts());
     }
-    
-    bool isNullabilityCompatible(const NullabilityKind expectedKind, const NullabilityKind actualKind) {
-        if (expectedKind == NullabilityKind::NonNull) {
-            if (actualKind != NullabilityKind::NonNull) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    bool isNullabilityCompatible(const QualType expectedType, const NullabilityKind actualKind) {
-        const Type *type = expectedType.getTypePtrOrNull();
-        if (type) {
-            NullabilityKind expectedKind = type->getNullability(Context).getValueOr(NullabilityKind::Unspecified);
-            return isNullabilityCompatible(expectedKind, actualKind);
-        } else {
-            return true;
-        }
-    }
 };
 
 class LAndExprChecker : public MethodBodyChecker {
