@@ -1,4 +1,8 @@
 typedef unsigned NSUInteger;
+typedef unsigned BOOL;
+
+#define YES (1)
+#define NO (0)
 
 __attribute__((objc_root_class))
 @interface NSObject

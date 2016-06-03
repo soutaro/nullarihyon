@@ -53,11 +53,6 @@ public:
 };
 
 class MethodBodyChecker : public RecursiveASTVisitor<MethodBodyChecker> {
-    ASTContext &Context;
-    QualType ReturnType;
-    ExprNullabilityCalculator &NullabilityCalculator;
-    NullabilityKindEnvironment &Env;
-    
 public:
     MethodBodyChecker(ASTContext &Context, QualType returnType, ExprNullabilityCalculator &Calculator, NullabilityKindEnvironment &env)
         : Context(Context), ReturnType(returnType), NullabilityCalculator(Calculator), Env(env) { }
@@ -71,9 +66,18 @@ public:
     virtual bool VisitObjCDictionaryLiteral(ObjCDictionaryLiteral *literal);
     virtual bool TraverseBlockExpr(BlockExpr *blockExpr);
     virtual bool TraverseIfStmt(IfStmt *ifStmt);
+    virtual bool TraverseBinLAnd(BinaryOperator *land);
     virtual bool VisitCStyleCastExpr(CStyleCastExpr *expr);
+    
+    virtual bool TraverseBinLOr(BinaryOperator *lor) { return RecursiveASTVisitor::TraverseBinLOr(lor); };
+    virtual bool TraverseUnaryLNot(UnaryOperator *lnot) { return RecursiveASTVisitor::TraverseUnaryLNot(lnot); };
 
 protected:
+    ASTContext &Context;
+    QualType ReturnType;
+    ExprNullabilityCalculator &NullabilityCalculator;
+    NullabilityKindEnvironment &Env;
+
     DiagnosticBuilder WarningReport(SourceLocation location) {
         DiagnosticsEngine &diagEngine = Context.getDiagnostics();
         unsigned diagID = diagEngine.getCustomDiagID(DiagnosticsEngine::Warning, "%0") ;
@@ -103,6 +107,16 @@ protected:
             return true;
         }
     }
+};
+
+class LAndExprChecker : public MethodBodyChecker {
+public:
+    LAndExprChecker(ASTContext &Context, QualType returnType, ExprNullabilityCalculator &Calculator, NullabilityKindEnvironment &env)
+        : MethodBodyChecker(Context, returnType, Calculator, env) {};
+
+    virtual bool TraverseBinLAnd(BinaryOperator *land);
+    virtual bool TraverseBinLOr(BinaryOperator *lor);
+    virtual bool TraverseUnaryLNot(UnaryOperator *S);
 };
 
 class NullCheckAction : public clang::ASTFrontendAction {

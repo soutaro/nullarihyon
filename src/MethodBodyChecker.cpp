@@ -137,35 +137,48 @@ bool MethodBodyChecker::TraverseBlockExpr(BlockExpr *blockExpr) {
     return true;
 }
 
+VarDecl *declRefOrNULL(Expr *expr) {
+    DeclRefExpr *ref = llvm::dyn_cast<DeclRefExpr>(expr->IgnoreParenImpCasts());
+    if (ref) {
+        ValueDecl *valueDecl = ref->getDecl();
+        return llvm::dyn_cast<VarDecl>(valueDecl);
+    } else {
+        return nullptr;
+    }
+}
+
 bool MethodBodyChecker::TraverseIfStmt(IfStmt *ifStmt) {
     Expr *condition = ifStmt->getCond();
     Stmt *thenStmt = ifStmt->getThen();
     Stmt *elseStmt = ifStmt->getElse();
     
-    DeclRefExpr *refExpr = llvm::dyn_cast<DeclRefExpr>(condition->IgnoreParenImpCasts());
-    if (refExpr) {
-        VarDecl *varDecl = llvm::dyn_cast<VarDecl>(refExpr->getDecl());
-        if (varDecl) {
-            const Type *type = varDecl->getType().getTypePtrOrNull();
-            NullabilityKindEnvironment environment = NullabilityCalculator.getEnvironment();
-            if (type && type->isObjectType()) {
-                environment[varDecl] = NullabilityKind::NonNull;
-            }
-            ExprNullabilityCalculator calculator(Context, environment, NullabilityCalculator.isDebug());
-            MethodBodyChecker checker = MethodBodyChecker(Context, ReturnType, calculator, environment);
-            checker.TraverseStmt(thenStmt);
-        } else {
-            this->TraverseStmt(thenStmt);
-        }
-        
-        if (elseStmt) {
-            this->TraverseStmt(elseStmt);
-        }
-        
-        return true;
-    } else {
-        return RecursiveASTVisitor::TraverseIfStmt(ifStmt);
+    NullabilityKindEnvironment environment = NullabilityCalculator.getEnvironment();
+    ExprNullabilityCalculator calculator(Context, environment, NullabilityCalculator.isDebug());
+    LAndExprChecker exprChecker(Context, ReturnType, calculator, environment);
+    
+    VarDecl *decl = declRefOrNULL(condition);
+    if (decl) {
+        environment[decl] = NullabilityKind::NonNull;
     }
+    
+    exprChecker.TraverseStmt(condition);
+    exprChecker.TraverseStmt(thenStmt);
+    
+    if (elseStmt) {
+        this->TraverseStmt(elseStmt);
+    }
+    
+    return true;
+}
+
+bool MethodBodyChecker::TraverseBinLAnd(BinaryOperator *land) {
+    NullabilityKindEnvironment environment = NullabilityCalculator.getEnvironment();
+    ExprNullabilityCalculator calculator(Context, environment, NullabilityCalculator.isDebug());
+    LAndExprChecker checker = LAndExprChecker(Context, ReturnType, calculator, environment);
+    
+    checker.TraverseStmt(land);
+    
+    return true;
 }
 
 bool MethodBodyChecker::VisitCStyleCastExpr(CStyleCastExpr *expr) {
@@ -193,3 +206,43 @@ bool MethodBodyChecker::VisitCStyleCastExpr(CStyleCastExpr *expr) {
     
     return true;
 }
+
+bool LAndExprChecker::TraverseUnaryLNot(UnaryOperator *S) {
+    NullabilityKindEnvironment environment = NullabilityCalculator.getEnvironment();
+    ExprNullabilityCalculator calculator(Context, environment, NullabilityCalculator.isDebug());
+    MethodBodyChecker checker(Context, ReturnType, calculator, environment);
+    
+    return checker.TraverseStmt(S);
+}
+
+bool LAndExprChecker::TraverseBinLOr(BinaryOperator *lor) {
+    NullabilityKindEnvironment environment = NullabilityCalculator.getEnvironment();
+    ExprNullabilityCalculator calculator(Context, environment, NullabilityCalculator.isDebug());
+    MethodBodyChecker checker(Context, ReturnType, calculator, environment);
+    
+    return checker.TraverseStmt(lor);
+}
+
+bool LAndExprChecker::TraverseBinLAnd(BinaryOperator *land) {
+    Expr *lhs = land->getLHS();
+    
+    VarDecl *lhsDecl = declRefOrNULL(lhs);
+    if (lhsDecl) {
+        Env[lhsDecl] = NullabilityKind::NonNull;
+    } else {
+        TraverseStmt(lhs);
+    }
+    
+    Expr *rhs = land->getRHS();
+    VarDecl *rhsDecl = declRefOrNULL(rhs);
+    if (rhsDecl) {
+        Env[rhsDecl] = NullabilityKind::NonNull;
+    } else {
+        TraverseStmt(rhs);
+    }
+    
+    return true;
+}
+
+
+

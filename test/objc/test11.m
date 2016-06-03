@@ -32,4 +32,65 @@
   }
 }
 
+- (void)test3 {
+  NSString * _Nullable x;
+  NSString * _Nullable y;
+
+  if (x && y) {
+    NSString * _Nonnull z;
+
+    z = x; // ok
+    z = y; // ok
+  }
+
+  if (x || y) {
+    NSString * _Nonnull z;
+
+    z = x; // expected-warning{{Nullability mismatch on assignment}}
+    z = y; // expected-warning{{Nullability mismatch on assignment}}
+  }
+
+  if (x && !y) {
+    NSString * _Nonnull z;
+
+    z = x; // ok
+    z = y; // expected-warning{{Nullability mismatch on assignment}}
+  }
+
+  if (!x && y) {
+    NSString * _Nonnull z;
+
+    z = x; // expected-warning{{Nullability mismatch on assignment}}
+    z = y; // ok
+  }
+}
+
+- (void)test4 {
+  NSString * _Nullable x;
+  NSString * _Nullable y;
+  NSString * _Nullable z;
+
+  BOOL a = x && [self expectingNonnull:x]; // ok
+  BOOL b = x || [self expectingNonnull:x]; // expected-warning{{-[Test11 expectingNonnull:] expects nonnull argument}}
+
+  BOOL c = x && y && [self expectingNonnull:x];
+  BOOL d = x && y && [self expectingNonnull:y];
+
+  BOOL e = x && [self expectingNonnull:y] && y; // expected-warning{{-[Test11 expectingNonnull:] expects nonnull argument}}
+
+  BOOL f1 = (x || y) && [self expectingNonnull:x]; // expected-warning{{-[Test11 expectingNonnull:] expects nonnull argument}}
+  BOOL f2 = (x || y) && [self expectingNonnull:y]; // expected-warning{{-[Test11 expectingNonnull:] expects nonnull argument}}
+
+  BOOL g1 = (x || (y && z)) && [self expectingNonnull:y]; // expected-warning{{-[Test11 expectingNonnull:] expects nonnull argument}}
+  BOOL g2 = !(x && y) && [self expectingNonnull:x]; // expected-warning{{-[Test11 expectingNonnull:] expects nonnull argument}}
+
+  BOOL h1 = (x && (y || (z && [self expectingNonnull:x])));
+  BOOL h2 = (x && (y || (z && [self expectingNonnull:y]))); // expected-warning{{-[Test11 expectingNonnull:] expects nonnull argument}}
+  BOOL h3 = (x && (y || (z && [self expectingNonnull:z])));
+}
+
+- (BOOL)expectingNonnull:(nonnull id)paramater {
+  return YES;
+}
+
 @end
