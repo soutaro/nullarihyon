@@ -8,6 +8,7 @@ module Nullarihyon
     attr_accessor :arc_enabled
     attr_accessor :modules_enabled
     attr_accessor :assertions_blocked
+    attr_accessor :arch
 
     attr_reader :header_search_paths
     attr_reader :other_flags
@@ -74,6 +75,10 @@ module Nullarihyon
         if option
           array << [option, header_search_path[1].to_s]
         end
+      end
+
+      if arch
+        array << ["-arch", arch.to_s]
       end
 
       array += other_flags

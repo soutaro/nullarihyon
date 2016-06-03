@@ -97,6 +97,11 @@ module Nullarihyon
           config.add_other_flag "-arch", "i386"
           assert config.commandline.include?(["-arch", "i386"])
         end
+
+        it "contains -arch flag if given" do
+          config.arch = :i386
+          assert config.commandline.include?(["-arch", "i386"])
+        end
       end
 
       describe ".sdk_paths" do

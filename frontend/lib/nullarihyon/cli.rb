@@ -20,11 +20,13 @@ module Nullarihyon
     option :arc, type: :boolean, default: true, desc: "Enable ARC"
     option :modules, type: :boolean, default: true, desc: "Enable modules"
     option :block_assertions, type: :boolean, default: true, desc: "Ignore NSAssert family"
+    option :arch, type: :string
     def check(*files)
       config = Configuration.new(Pathname(options[:analyzer]).realpath, Pathname(options[:resource_dir]).realpath)
       config.arc_enabled = options[:arc]
       config.modules_enabled = options[:modules]
       config.assertions_blocked = options[:block_assertions]
+      config.arch = options[:arch]
 
       if options[:sdk]
         config.sysroot_path = CLI.sdks[options[:sdk]]

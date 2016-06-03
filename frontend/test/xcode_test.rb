@@ -157,6 +157,12 @@ module Nullarihyon
       end
     end
 
+    describe "#arch" do
+      it "reads arch fron env" do
+        assert_equal "x86_64", xcode.arch
+      end
+    end
+
     describe ".tokenize_command_line" do
       it "splits command line to tokens" do
         assert_equal %w(a b c), Xcode.tokenize_command_line("a b c")

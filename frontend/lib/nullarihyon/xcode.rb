@@ -44,7 +44,7 @@ module Nullarihyon
     def objects_dir_path
       variant = env["variant"]
       key = "OBJECT_FILE_DIR_#{variant}"
-      Pathname(env[key]) + env["arch"]
+      Pathname(env[key]) + arch
     end
 
     def sdkroot_path
@@ -69,6 +69,8 @@ module Nullarihyon
 
         config.add_header_search_path :include, objects_dir_path
 
+        config.arch = arch
+
         other_cflags.each do |flag|
           config.add_other_flag flag
         end
@@ -77,6 +79,10 @@ module Nullarihyon
 
     def sources
       @target.source_build_phase.files_references.map {|file| file.real_path }.select {|path| path.extname == ".m" }
+    end
+
+    def arch
+      env["arch"]
     end
 
     def last_check_result_path(source, objects_dir)
