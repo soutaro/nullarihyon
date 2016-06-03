@@ -8,7 +8,7 @@
 
 - (nonnull NSString *)test3 {
   NSString * _Nullable nullableString;
-  return nullableString; // expected-warning{{Nullability mismatch on return}}
+  return nullableString; // expected-warning{{-[Test3 test3] expects nonnull to return}}
 }
 
 - (nonnull NSString *)test31 {

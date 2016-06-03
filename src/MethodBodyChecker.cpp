@@ -80,7 +80,20 @@ bool MethodBodyChecker::VisitReturnStmt(ReturnStmt *retStmt) {
     Expr *value = retStmt->getRetValue();
     if (value) {
         if (!isNullabilityCompatible(CheckContext.getReturnType(), calculateNullability(value))) {
-            WarningReport(value->getExprLoc()) << "Nullability mismatch on return";
+            std::string className = CheckContext.getInterfaceDecl().getNameAsString();
+            std::string methodName = CheckContext.getMethodDecl().getSelector().getAsString();
+            std::string kind = CheckContext.getMethodDecl().isClassMethod() ? "+" : "-";
+            std::string name = kind + "[" + className + " " + methodName + "]";
+            
+            std::string message;
+            
+            if (CheckContext.getBlockExpr()) {
+                message = "Block in " + name + " expects nonnull to return";
+            } else {
+                message = name + " expects nonnull to return";
+            }
+            
+            WarningReport(value->getExprLoc()) << message;
         }
     }
     

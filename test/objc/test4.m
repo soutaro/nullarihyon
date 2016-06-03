@@ -11,10 +11,22 @@
   
   NSString * _Nonnull (^block)() = ^NSString * _Nonnull () {
     NSString * _Nullable a;
-    return a; // expected-warning{{Nullability mismatch on return}}
+    return a; // expected-warning{{Block in -[Test4 test] expects nonnull to return}}
   };
 
   return a;
+}
+
+- (nonnull NSString *)test1 {
+  NSString * _Nullable a;
+
+  return a; // expected-warning{{-[Test4 test1] expects nonnull to return}}
+}
+
++ (nonnull NSString *)foo {
+  NSString * _Nullable a;
+
+  return a; // expected-warning{{+[Test4 foo] expects nonnull to return}}
 }
 
 @end
