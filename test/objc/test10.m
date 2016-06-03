@@ -34,4 +34,15 @@
   a = (NSString * _Nonnull)x;
 }
 
+- (void)test4 {
+  NSString * _Nonnull x;
+  NSString * _Nonnull y = (NSString * _Nonnull)x; // expected-warning{{Redundant cast to nonnull}}
+
+  NSString *a = @"hello";  // expected-remark{{Variable nullability: nonnull}}
+  NSString * _Nonnull b = (NSString * _Nonnull)a; // expected-warning{{Redundant cast to nonnull}}
+
+  id _Nonnull s;
+  NSString * _Nonnull t = (NSString * _Nonnull)s; // expected-warning{{Redundant cast to nonnull}}
+}
+
 @end

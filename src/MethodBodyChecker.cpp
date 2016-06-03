@@ -183,22 +183,28 @@ bool MethodBodyChecker::TraverseBinLAnd(BinaryOperator *land) {
 
 bool MethodBodyChecker::VisitCStyleCastExpr(CStyleCastExpr *expr) {
     Expr *subExpr = expr->getSubExpr();
-    const Type *subExprType = subExpr->getType().getTypePtrOrNull();
     
+    const Type *subExprType = subExpr->getType().getTypePtrOrNull();
     const Type *type = expr->getType().getTypePtrOrNull();
     
     if (subExprType && type) {
-        Optional<NullabilityKind> subExprKind = subExprType->getNullability(Context);
-        Optional<NullabilityKind> exprKind = type->getNullability(Context);
+        Optional<NullabilityKind> subExprKind = NullabilityCalculator.Visit(subExpr->IgnoreParenImpCasts());
+        Optional<NullabilityKind> exprKind = NullabilityCalculator.Visit(expr->IgnoreParenImpCasts());
         
         if (exprKind.getValueOr(NullabilityKind::Unspecified) == NullabilityKind::NonNull) {
-            if (subExprKind.getValueOr(NullabilityKind::Unspecified) != NullabilityKind::NonNull) {
-                if (subExpr->getType().getDesugaredType(Context) != expr->getType().getDesugaredType(Context)) {
-                    if (subExprType->isObjCIdType() || subExprType->isObjCQualifiedIdType()) {
-                        // cast from id is okay
-                    } else {
-                        WarningReport(expr->getExprLoc()) << "Cast on nullability cannot change base type";
-                    }
+            bool castToSame = subExpr->getType().getDesugaredType(Context) == expr->getType().getDesugaredType(Context);
+            bool castFromID = subExprType->isObjCIdType() || subExprType->isObjCQualifiedIdType();
+            
+            if (subExprKind.getValueOr(NullabilityKind::Unspecified) == NullabilityKind::NonNull) {
+                if (castToSame || castFromID) {
+                    WarningReport(expr->getExprLoc()) << "Redundant cast to nonnull";
+                }
+            } else {
+                if (castToSame || castFromID) {
+                    // Cast to same type with nonnull is okay
+                    // Cast from ID is okay
+                } else {
+                    WarningReport(expr->getExprLoc()) << "Cast on nullability cannot change base type";
                 }
             }
         }
