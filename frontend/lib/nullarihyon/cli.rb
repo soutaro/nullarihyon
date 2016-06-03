@@ -59,6 +59,11 @@ module Nullarihyon
         exit
       end
 
+      if ENV["arch"] =~ /arm/
+        puts "⚠️  " + Rainbow("#{ENV["arch"]} is not a supported architecture...").red
+        exit
+      end
+
       Xcode.new(Pathname(options[:analyzer]).realpath, Pathname(options[:resource_dir]).realpath, options[:jobs], options[:only_latest]).run(STDOUT)
     end
   end
