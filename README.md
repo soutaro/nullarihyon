@@ -86,6 +86,9 @@ nullarihyon xcode --only-latest
 With `--only-latest` option, Xcode warnings will be flushed every time you run build.
 Warnings for files which is compiled during last build will be shown.
 
+Nullarihyon checks timestamp of compiled objects to see if the source code is updated or not.
+Add the new phase after `Compile Sources` phase.
+
 # Fixing Warnings
 
 To fix nullability warnings, there are things you can do.
@@ -218,6 +221,7 @@ There are a few assumptions introduced by Nullarihyon.
 
 * It does not support prefix headers
 * It does not support per-file build setting in Xcode
+* It does not support arm architectures (just skip checking)
 
 # Nullability Check
 
