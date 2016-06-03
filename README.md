@@ -190,8 +190,21 @@ if (x) {
 }
 ```
 
-The condition clause of `if` have to be exactly one variable reference.
-Any other forms including conjunction (`&&`) and property reference are not supported.
+The analyzer consider binary `&&` with variable reference.
+
+```objc
+NSString * _Nullable x;
+
+T a = x && [self nonnullMethod:x];  // x is nonnull on method call
+
+NSString * _Nullable y;
+
+if (x && y) {
+  // x and y are nonnull in true clause
+}
+```
+
+The nullability modification works only with variable reference.
 
 # Assumptions
 
