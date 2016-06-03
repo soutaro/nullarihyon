@@ -52,10 +52,41 @@ public:
     NullabilityKind VisitCastExpr(CastExpr *expr) { return getNullability(expr->getType()); }
 };
 
+class NullabilityCheckContext {
+    ObjCInterfaceDecl &InterfaceDecl;
+    ObjCMethodDecl &MethodDecl;
+    BlockExpr *BlockExpr;
+    
+public:
+    NullabilityCheckContext(ObjCInterfaceDecl &interfaceDecl, ObjCMethodDecl &methodDecl, clang::BlockExpr *blockExpr)
+        : InterfaceDecl(interfaceDecl), MethodDecl(methodDecl), BlockExpr(blockExpr) {}
+    
+    NullabilityCheckContext(ObjCInterfaceDecl &interfaceDecl, ObjCMethodDecl &methodDecl)
+        : InterfaceDecl(interfaceDecl), MethodDecl(methodDecl), BlockExpr(nullptr) {}
+    
+    ObjCInterfaceDecl &getInterfaceDecl() {
+        return InterfaceDecl;
+    }
+    
+    ObjCMethodDecl &getMethodDecl() {
+        return MethodDecl;
+    }
+    
+    clang::BlockExpr *getBlockExpr() {
+        return BlockExpr;
+    }
+    
+    QualType getReturnType();
+    
+    NullabilityCheckContext newContextForBlock(clang::BlockExpr *blockExpr) {
+        return NullabilityCheckContext(InterfaceDecl, MethodDecl, blockExpr);
+    }
+};
+
 class MethodBodyChecker : public RecursiveASTVisitor<MethodBodyChecker> {
 public:
-    MethodBodyChecker(ASTContext &Context, QualType returnType, ExprNullabilityCalculator &Calculator, NullabilityKindEnvironment &env)
-        : Context(Context), ReturnType(returnType), NullabilityCalculator(Calculator), Env(env) { }
+    MethodBodyChecker(ASTContext &Context, NullabilityCheckContext &checkContext, ExprNullabilityCalculator &Calculator, NullabilityKindEnvironment &env)
+        : Context(Context), CheckContext(checkContext), NullabilityCalculator(Calculator), Env(env) { }
     virtual ~MethodBodyChecker() {}
 
     virtual bool VisitDeclStmt(DeclStmt *decl);
@@ -74,7 +105,7 @@ public:
 
 protected:
     ASTContext &Context;
-    QualType ReturnType;
+    NullabilityCheckContext &CheckContext;
     ExprNullabilityCalculator &NullabilityCalculator;
     NullabilityKindEnvironment &Env;
 
@@ -111,8 +142,8 @@ protected:
 
 class LAndExprChecker : public MethodBodyChecker {
 public:
-    LAndExprChecker(ASTContext &Context, QualType returnType, ExprNullabilityCalculator &Calculator, NullabilityKindEnvironment &env)
-        : MethodBodyChecker(Context, returnType, Calculator, env) {};
+    LAndExprChecker(ASTContext &Context, NullabilityCheckContext &checkContext, ExprNullabilityCalculator &Calculator, NullabilityKindEnvironment &env)
+        : MethodBodyChecker(Context, checkContext, Calculator, env) {};
 
     virtual bool TraverseBinLAnd(BinaryOperator *land);
     virtual bool TraverseBinLOr(BinaryOperator *lor);

@@ -79,7 +79,7 @@ bool MethodBodyChecker::VisitBinAssign(BinaryOperator *assign) {
 bool MethodBodyChecker::VisitReturnStmt(ReturnStmt *retStmt) {
     Expr *value = retStmt->getRetValue();
     if (value) {
-        if (!isNullabilityCompatible(ReturnType, calculateNullability(value))) {
+        if (!isNullabilityCompatible(CheckContext.getReturnType(), calculateNullability(value))) {
             WarningReport(value->getExprLoc()) << "Nullability mismatch on return";
         }
     }
@@ -123,16 +123,10 @@ bool MethodBodyChecker::VisitObjCDictionaryLiteral(ObjCDictionaryLiteral *litera
 }
 
 bool MethodBodyChecker::TraverseBlockExpr(BlockExpr *blockExpr) {
-    const Type *type = blockExpr->getType().getTypePtr();
-    const BlockPointerType *blockType = llvm::dyn_cast<BlockPointerType>(type);
-    if (blockType) {
-        const FunctionProtoType *funcType = llvm::dyn_cast<FunctionProtoType>(blockType->getPointeeType().getTypePtr());
-        if (funcType) {
-            QualType retType = funcType->getReturnType();
-            MethodBodyChecker checker(Context, retType, NullabilityCalculator, Env);
-            checker.TraverseStmt(blockExpr->getBody());
-        }
-    }
+    NullabilityCheckContext blockContext = CheckContext.newContextForBlock(blockExpr);
+    
+    MethodBodyChecker checker(Context,  blockContext, NullabilityCalculator, Env);
+    checker.TraverseStmt(blockExpr->getBody());
     
     return true;
 }
@@ -154,7 +148,7 @@ bool MethodBodyChecker::TraverseIfStmt(IfStmt *ifStmt) {
     
     NullabilityKindEnvironment environment = NullabilityCalculator.getEnvironment();
     ExprNullabilityCalculator calculator(Context, environment, NullabilityCalculator.isDebug());
-    LAndExprChecker exprChecker(Context, ReturnType, calculator, environment);
+    LAndExprChecker exprChecker(Context, CheckContext, calculator, environment);
     
     VarDecl *decl = declRefOrNULL(condition);
     if (decl) {
@@ -174,7 +168,7 @@ bool MethodBodyChecker::TraverseIfStmt(IfStmt *ifStmt) {
 bool MethodBodyChecker::TraverseBinLAnd(BinaryOperator *land) {
     NullabilityKindEnvironment environment = NullabilityCalculator.getEnvironment();
     ExprNullabilityCalculator calculator(Context, environment, NullabilityCalculator.isDebug());
-    LAndExprChecker checker = LAndExprChecker(Context, ReturnType, calculator, environment);
+    LAndExprChecker checker = LAndExprChecker(Context, CheckContext, calculator, environment);
     
     checker.TraverseStmt(land);
     
@@ -216,7 +210,7 @@ bool MethodBodyChecker::VisitCStyleCastExpr(CStyleCastExpr *expr) {
 bool LAndExprChecker::TraverseUnaryLNot(UnaryOperator *S) {
     NullabilityKindEnvironment environment = NullabilityCalculator.getEnvironment();
     ExprNullabilityCalculator calculator(Context, environment, NullabilityCalculator.isDebug());
-    MethodBodyChecker checker(Context, ReturnType, calculator, environment);
+    MethodBodyChecker checker(Context, CheckContext, calculator, environment);
     
     return checker.TraverseStmt(S);
 }
@@ -224,7 +218,7 @@ bool LAndExprChecker::TraverseUnaryLNot(UnaryOperator *S) {
 bool LAndExprChecker::TraverseBinLOr(BinaryOperator *lor) {
     NullabilityKindEnvironment environment = NullabilityCalculator.getEnvironment();
     ExprNullabilityCalculator calculator(Context, environment, NullabilityCalculator.isDebug());
-    MethodBodyChecker checker(Context, ReturnType, calculator, environment);
+    MethodBodyChecker checker(Context, CheckContext, calculator, environment);
     
     return checker.TraverseStmt(lor);
 }

@@ -12,7 +12,17 @@
 using namespace llvm;
 using namespace clang;
 
-
+QualType NullabilityCheckContext::getReturnType() {
+    if (BlockExpr) {
+        const Type *type = BlockExpr->getType().getTypePtr();
+        const BlockPointerType *blockType = llvm::dyn_cast<BlockPointerType>(type);
+        const FunctionProtoType *funcType = llvm::dyn_cast<FunctionProtoType>(blockType->getPointeeType().getTypePtr());
+        
+        return funcType->getReturnType();
+    } else {
+        return MethodDecl.getReturnType();
+    }
+}
 
 class VariableNullabilityInference: public RecursiveASTVisitor<VariableNullabilityInference> {
 public:
@@ -115,9 +125,10 @@ public:
                         engine.Report(decl->getLocation(), id) << x;
                     }
                 }
+                
+                NullabilityCheckContext checkContext(*(methodDecl->getClassInterface()), *methodDecl);
 
-                QualType returnType = methodDecl->getReturnType();
-                MethodBodyChecker checker(Context, returnType, calculator, env);
+                MethodBodyChecker checker(Context, checkContext, calculator, env);
                 checker.TraverseStmt(methodDecl->getBody());
             }
         }
