@@ -4,6 +4,7 @@
 
 @property (nonatomic, nonnull) NSString *nonnullString;
 @property (nonatomic, nullable) NSString *nullableString;
+@property (nonatomic) NSString *unspecifiedString;
 
 @end
 
@@ -21,6 +22,11 @@
 
   x = self.nonnullString; // no warning
   x = self.nullableString; // expected-warning{{Nullability mismatch on assignment}}
+}
+
+- (void)test3 {
+  NSString * _Nonnull x;
+  x = self.unspecifiedString; // expected-warning{{Nullability mismatch on assignment}}
 }
 
 @end

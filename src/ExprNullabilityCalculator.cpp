@@ -100,8 +100,8 @@ NullabilityKind ExprNullabilityCalculator::VisitObjCMessageExpr(ObjCMessageExpr 
         return NullabilityKind::Nullable;
     }
     
-    // If the method is alloc/class and no nullability is given, assume it returns nonnull
-    if (name == "alloc" || name == "class" || "init") {
+    // alloc, class, and init are assumed to return nonnull
+    if (name == "alloc" || name == "class" || name == "init") {
         Optional<NullabilityKind> kind;
         if (decl) {
             const Type *type = decl->getReturnType().getTypePtrOrNull();
