@@ -1,92 +1,69 @@
 #include <unordered_map>
+#include <set>
 
 #include <clang/Frontend/FrontendActions.h>
 #include <clang/AST/ASTConsumer.h>
 #include <clang/AST/StmtVisitor.h>
 #include <clang/AST/RecursiveASTVisitor.h>
 
+#include "ExpressionNullabilityCalculator.h"
+
 using namespace clang;
 
-typedef std::unordered_map<VarDecl *, NullabilityKind> NullabilityKindEnvironment;
-
-class ExprNullabilityCalculator : public clang::StmtVisitor<ExprNullabilityCalculator, NullabilityKind> {
-    ASTContext &Context;
-    const NullabilityKindEnvironment &Env;
-    bool Debug;
-    
-    NullabilityKind getNullability(const QualType &qualType);
-    NullabilityKind UnexpectedUnspecified(Expr *expr);
-
+class MethodUtility {
 public:
-    ExprNullabilityCalculator(ASTContext &context, const NullabilityKindEnvironment &env, bool debug)
-        : Context(context), Env(env), Debug(debug) { }
-    
-    const NullabilityKindEnvironment &getEnvironment() {
-        return Env;
-    }
-    
-    bool isDebug() {
-        return Debug;
-    }
-    
-    NullabilityKind VisitExpr(Expr *expr);
-    NullabilityKind VisitDeclRefExpr(DeclRefExpr *refExpr);
-    NullabilityKind VisitObjCPropertyRefExpr(ObjCPropertyRefExpr *expr);
-    NullabilityKind VisitPseudoObjectExpr(PseudoObjectExpr *expr);
-    NullabilityKind VisitObjCMessageExpr(ObjCMessageExpr *expr);
-    NullabilityKind VisitObjCSubscriptRefExpr(ObjCSubscriptRefExpr *expr);
-    NullabilityKind VisitBinAssign(BinaryOperator *expr);
-    NullabilityKind VisitConditionalOperator(ConditionalOperator *expr);
-    NullabilityKind VisitVarDecl(VarDecl *varDecl);
-
-    NullabilityKind VisitObjCIvarRefExpr(ObjCIvarRefExpr *expr) { return getNullability(expr->getType()); }
-    NullabilityKind VisitOpaqueValueExpr(OpaqueValueExpr *expr) { return Visit(expr->getSourceExpr()->IgnoreParenImpCasts()); }
-    NullabilityKind VisitExprWithCleanups(ExprWithCleanups *expr) { return Visit(expr->getSubExpr()->IgnoreParenImpCasts()); }
-    NullabilityKind VisitPredefinedExpr(PredefinedExpr *expr) { return NullabilityKind::NonNull; }
-    NullabilityKind VisitCallExpr(CallExpr *expr) { return getNullability(expr->getType()); }
-    NullabilityKind VisitMemberExpr(MemberExpr *expr) { return Visit(expr->getBase()->IgnoreParenImpCasts()); }
-    NullabilityKind VisitBinaryOperator(BinaryOperator *expr) { return NullabilityKind::NonNull; }
-    NullabilityKind VisitBinaryConditionalOperator(BinaryConditionalOperator *expr) { return Visit(expr->getFalseExpr()->IgnoreParenImpCasts()); }
-    NullabilityKind VisitBlockExpr(BlockExpr *expr) { return NullabilityKind::NonNull; }
-    NullabilityKind VisitStmtExpr(StmtExpr *expr) { return getNullability(expr->getType()); }
-    NullabilityKind VisitCastExpr(CastExpr *expr) { return getNullability(expr->getType()); }
+    std::set<const clang::ObjCContainerDecl *> enumerateContainers(const clang::ObjCMessageExpr *expr);
 };
 
 class NullabilityCheckContext {
-    ObjCInterfaceDecl &InterfaceDecl;
-    ObjCMethodDecl &MethodDecl;
-    BlockExpr *BlockExpr;
+    const ObjCInterfaceDecl &InterfaceDecl;
+    const ObjCMethodDecl &MethodDecl;
+    const BlockExpr *BlockExpr;
     
 public:
-    NullabilityCheckContext(ObjCInterfaceDecl &interfaceDecl, ObjCMethodDecl &methodDecl, clang::BlockExpr *blockExpr)
+    NullabilityCheckContext(const ObjCInterfaceDecl &interfaceDecl, const ObjCMethodDecl &methodDecl, const clang::BlockExpr *blockExpr)
         : InterfaceDecl(interfaceDecl), MethodDecl(methodDecl), BlockExpr(blockExpr) {}
     
-    NullabilityCheckContext(ObjCInterfaceDecl &interfaceDecl, ObjCMethodDecl &methodDecl)
+    NullabilityCheckContext(const ObjCInterfaceDecl &interfaceDecl, const ObjCMethodDecl &methodDecl)
         : InterfaceDecl(interfaceDecl), MethodDecl(methodDecl), BlockExpr(nullptr) {}
     
-    ObjCInterfaceDecl &getInterfaceDecl() {
+    const ObjCInterfaceDecl &getInterfaceDecl() const {
         return InterfaceDecl;
     }
     
-    ObjCMethodDecl &getMethodDecl() {
+    const ObjCMethodDecl &getMethodDecl() const {
         return MethodDecl;
     }
     
-    clang::BlockExpr *getBlockExpr() {
+    const clang::BlockExpr *getBlockExpr() const {
         return BlockExpr;
     }
     
-    QualType getReturnType();
+    QualType getReturnType() const;
     
-    NullabilityCheckContext newContextForBlock(clang::BlockExpr *blockExpr) {
+    NullabilityCheckContext newContextForBlock(const clang::BlockExpr *blockExpr) {
         return NullabilityCheckContext(InterfaceDecl, MethodDecl, blockExpr);
     }
 };
 
 class MethodBodyChecker : public RecursiveASTVisitor<MethodBodyChecker> {
+protected:
+    ASTContext &_ASTContext;
+    NullabilityCheckContext &_CheckContext;
+    ExpressionNullabilityCalculator &_NullabilityCalculator;
+    std::shared_ptr<VariableNullabilityEnvironment> _VarEnv;
+    std::vector<std::string> &_Filter;
+    
+    DiagnosticBuilder WarningReport(SourceLocation location, std::set<std::string> &subjects);
+    DiagnosticBuilder WarningReport(SourceLocation location, std::set<const clang::ObjCContainerDecl *> &subjects);
+    
 public:
-    MethodBodyChecker(ASTContext &Context, NullabilityCheckContext &checkContext, ExprNullabilityCalculator &Calculator, NullabilityKindEnvironment &env)
-        : Context(Context), CheckContext(checkContext), NullabilityCalculator(Calculator), Env(env) { }
+    explicit MethodBodyChecker(ASTContext &astContext,
+                               NullabilityCheckContext &checkContext,
+                               ExpressionNullabilityCalculator &nullabilityCalculator,
+                               std::shared_ptr<VariableNullabilityEnvironment> &env,
+                               std::vector<std::string> &filter)
+    : _ASTContext(astContext), _CheckContext(checkContext), _NullabilityCalculator(nullabilityCalculator), _VarEnv(env), _Filter(filter) {}
     virtual ~MethodBodyChecker() {}
 
     virtual bool VisitDeclStmt(DeclStmt *decl);
@@ -102,28 +79,22 @@ public:
     
     virtual bool TraverseBinLOr(BinaryOperator *lor) { return RecursiveASTVisitor::TraverseBinLOr(lor); };
     virtual bool TraverseUnaryLNot(UnaryOperator *lnot) { return RecursiveASTVisitor::TraverseUnaryLNot(lnot); };
-
-protected:
-    ASTContext &Context;
-    NullabilityCheckContext &CheckContext;
-    ExprNullabilityCalculator &NullabilityCalculator;
-    NullabilityKindEnvironment &Env;
-
-    DiagnosticBuilder WarningReport(SourceLocation location) {
-        DiagnosticsEngine &diagEngine = Context.getDiagnostics();
-        unsigned diagID = diagEngine.getCustomDiagID(DiagnosticsEngine::Warning, "%0") ;
-        return diagEngine.Report(location, diagID);
-    }
     
-    NullabilityKind calculateNullability(Expr *expr) {
-        return NullabilityCalculator.Visit(expr->IgnoreParenImpCasts());
-    }
+    virtual ObjCContainerDecl *InterfaceForSelector(const Expr *receiver, const Selector selector);
+    virtual std::string MethodNameAsString(const ObjCMessageExpr &messageExpr);
+    virtual std::string MethodCallSubjectAsString(const ObjCMessageExpr &messageExpr);
+    
+    virtual std::set<const ObjCContainerDecl *> subjectDecls(const Expr *expr);
 };
 
 class LAndExprChecker : public MethodBodyChecker {
 public:
-    LAndExprChecker(ASTContext &Context, NullabilityCheckContext &checkContext, ExprNullabilityCalculator &Calculator, NullabilityKindEnvironment &env)
-        : MethodBodyChecker(Context, checkContext, Calculator, env) {};
+    explicit LAndExprChecker(ASTContext &astContext,
+                             NullabilityCheckContext &checkContext,
+                             ExpressionNullabilityCalculator &nullabilityCalculator,
+                             std::shared_ptr<VariableNullabilityEnvironment> &env,
+                             std::vector<std::string> &filter)
+    : MethodBodyChecker(astContext, checkContext, nullabilityCalculator, env, filter) {}
 
     virtual bool TraverseBinLAnd(BinaryOperator *land);
     virtual bool TraverseBinLOr(BinaryOperator *lor);
@@ -134,10 +105,17 @@ class NullCheckAction : public clang::ASTFrontendAction {
 public:
     virtual std::unique_ptr<clang::ASTConsumer> CreateASTConsumer(clang::CompilerInstance &Compiler, clang::StringRef InFile);
     
+    explicit NullCheckAction() : clang::ASTFrontendAction(), Debug(false), Filter(std::vector<std::string>()) {}
+    
     void setDebug(bool debug) {
         Debug = debug;
     }
     
+    void setFilter(std::vector<std::string> &filter) {
+        Filter = filter;
+    }
+    
 private:
     bool Debug;
+    std::vector<std::string> Filter;
 };

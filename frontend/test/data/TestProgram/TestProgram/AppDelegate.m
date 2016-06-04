@@ -60,9 +60,25 @@
     if (_managedObjectModel != nil) {
         return _managedObjectModel;
     }
+    
+    NSObject *y;
+    NSObject *x = (y = [[NSObject alloc] init]);
+    
     NSURL *modelURL = [[NSBundle mainBundle] URLForResource:@"TestProgram" withExtension:@"momd"];
     _managedObjectModel = [[NSManagedObjectModel alloc] initWithContentsOfURL:modelURL];
     return _managedObjectModel;
+}
+
+- (int)foo:(NSUInteger)x {
+    int retval;
+    
+    if (x > 0) {
+        retval = 1;
+    } else if (x == 0) {
+        retval = 0;
+    }
+    
+    return retval;
 }
 
 - (NSPersistentStoreCoordinator *)persistentStoreCoordinator {

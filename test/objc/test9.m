@@ -19,6 +19,8 @@
   [self argumentIsNonnull:x]; // ok
   [self argumentIsNonnull:y]; // expected-warning{{-[Test argumentIsNonnull:] expects nonnull argument}}
   [self argumentIsNonnull:z]; // expected-warning{{-[Test argumentIsNonnull:] expects nonnull argument}}
+
+  id a = @""; // expected-remark{{Variable nullability: nonnull}}
 }
 
 @end

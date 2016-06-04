@@ -9,7 +9,7 @@
 - (NSString *)test {
   NSString * _Nonnull a;
   
-  NSString * _Nonnull (^block)() = ^NSString * _Nonnull () {
+  NSString * _Nonnull (^block)() = ^NSString * _Nonnull () { // expected-remark{{Variable nullability: nonnull}}
     NSString * _Nullable a;
     return a; // expected-warning{{Block in -[Test4 test] expects nonnull to return}}
   };

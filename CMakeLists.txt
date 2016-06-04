@@ -67,6 +67,7 @@ set (CLANG_LIBS
   clangStaticAnalyzerCore
   clangStaticAnalyzerFrontend
   clangTooling
+  clangASTMatchers
 )
 
 set (USER_LIBS

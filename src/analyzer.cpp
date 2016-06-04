@@ -12,7 +12,64 @@
 using namespace llvm;
 using namespace clang;
 
-QualType NullabilityCheckContext::getReturnType() {
+std::set<const clang::ObjCContainerDecl *> MethodUtility::enumerateContainers(const clang::ObjCMessageExpr *expr) {
+    std::set<const ObjCContainerDecl *> set;
+    Selector selector = expr->getSelector();
+    
+    if (expr->getInstanceReceiver()) {
+        const Expr *receiver = expr->getInstanceReceiver();
+        const Type *receiverType = receiver->getType().getTypePtr();
+
+        if (receiverType->isObjCObjectPointerType()) {
+            const ObjCObjectPointerType *objectPointerType = receiverType->getAsObjCInterfacePointerType();
+            if (objectPointerType) {
+                const ObjCInterfaceDecl *interface = objectPointerType->getInterfaceDecl();
+    
+                while (interface) {
+                    if (interface->getInstanceMethod(selector)) {
+                        set.insert(interface);
+                        interface = nullptr; // break
+                    } else {
+                        for (auto protocol : interface->protocols()) {
+                            if (protocol->getInstanceMethod(selector)) {
+                                set.insert(protocol);
+                                interface = nullptr; //break
+                            }
+                        }
+                    }
+                    
+                    if (interface) {
+                        interface = interface->getSuperClass();
+                    }
+                }
+            }
+            
+            if (receiverType->isObjCQualifiedIdType()) {
+                const ObjCObjectPointerType *pointerType = receiverType->getAsObjCQualifiedIdType();
+                
+                auto protocols = pointerType->getNumProtocols();
+                for (unsigned index = 0; index < protocols; index++) {
+                    auto protocol = pointerType->getProtocol(index);
+                    
+                    if (protocol->getInstanceMethod(selector)) {
+                        set.insert(protocol);
+                    }
+                }
+            }
+        }
+    }
+    
+    if (expr->isClassMessage()) {
+        const ObjCInterfaceDecl *interface = expr->getMethodDecl()->getClassInterface();
+        if (interface) {
+            set.insert(interface);
+        }
+    }
+    
+    return set;
+}
+
+QualType NullabilityCheckContext::getReturnType() const {
     if (BlockExpr) {
         const Type *type = BlockExpr->getType().getTypePtr();
         const BlockPointerType *blockType = llvm::dyn_cast<BlockPointerType>(type);
@@ -24,89 +81,27 @@ QualType NullabilityCheckContext::getReturnType() {
     }
 }
 
-class VariableNullabilityInference: public RecursiveASTVisitor<VariableNullabilityInference> {
-public:
-    VariableNullabilityInference(ASTContext &context, NullabilityKindEnvironment &env, ExprNullabilityCalculator &calculator)
-        : Context(context), Env(env), Calculator(calculator) {
-    }
-
-    bool VisitDeclStmt(DeclStmt *decl) {
-        DeclGroupRef group = decl->getDeclGroup();
-        DeclGroupRef::iterator it;
-        for(it = group.begin(); it != group.end(); it++) {
-            VarDecl *vd = llvm::dyn_cast<VarDecl>(*it);
-            if (vd) {
-                QualType varType = vd->getType();
-                const Type *type = varType.getTypePtrOrNull();
-
-                if (type) {
-                    if (Env.find(vd) == Env.end()) {
-                        Optional<NullabilityKind> kind = type->getNullability(Context);
-                        Expr *init = vd->getInit();
-
-                        if (type->isObjCObjectPointerType()) {
-                            if (init && llvm::dyn_cast<ImplicitValueInitExpr>(init) == nullptr && !kind.hasValue()) {
-                                Env[vd] = Calculator.Visit(init);
-                            }
-                        }
-                    }
-                }
-            }
-        }        
-
-        return true;
-    }
-
-    bool VisitObjCForCollectionStmt(ObjCForCollectionStmt *stmt) {
-        DeclStmt *decl = llvm::dyn_cast<DeclStmt>(stmt->getElement());
-        if (decl) {
-            DeclGroupRef group = decl->getDeclGroup();
-            DeclGroupRef::iterator it;
-            for(it = group.begin(); it != group.end(); it++) {
-                VarDecl *vd = llvm::dyn_cast<VarDecl>(*it);
-                if (vd) {
-                    QualType varType = vd->getType();
-                    const Type *type = varType.getTypePtrOrNull();
-
-                    if (type) {
-                        Optional<NullabilityKind> kind = type->getNullability(Context);
-                        if (!kind.hasValue()) {
-                            Env[vd] = NullabilityKind::NonNull;
-                        }
-                    }
-                }
-            }        
-        }
-        return true;
-    }
-
-private:
-    ASTContext &Context;
-    NullabilityKindEnvironment &Env;
-    ExprNullabilityCalculator &Calculator;
-};
-
 class NullCheckVisitor : public RecursiveASTVisitor<NullCheckVisitor> {
 public:
-    NullCheckVisitor(ASTContext &context, bool debug) : Context(context), Debug(debug) {}
+    NullCheckVisitor(ASTContext &context, bool debug, std::vector<std::string> &filter) : _ASTContext(context), _Debug(debug), _Filter(filter) {}
 
     bool VisitDecl(Decl *decl) {
         ObjCMethodDecl *methodDecl = llvm::dyn_cast<ObjCMethodDecl>(decl);
         if (methodDecl) {
             if (methodDecl->hasBody()) {
-                NullabilityKindEnvironment env;
+                auto map = std::shared_ptr<VariableNullabilityMapping>(new VariableNullabilityMapping);
+                
+                std::shared_ptr<VariableNullabilityEnvironment> varEnv(new VariableNullabilityEnvironment(_ASTContext, map));
+                ExpressionNullabilityCalculator nullabilityCalculator(_ASTContext, varEnv);
+                VariableNullabilityPropagation propagation(nullabilityCalculator, varEnv);
+                
+                propagation.propagate(methodDecl);
 
-                ExprNullabilityCalculator calculator(Context, env, Debug);
-                VariableNullabilityInference varInference(Context, env, calculator);
-
-                varInference.TraverseStmt(methodDecl->getBody());
-
-                if (Debug) {
-                    NullabilityKindEnvironment::iterator it;
-                    for (it = env.begin(); it != env.end(); it++) {
-                        VarDecl *decl = it->first;
-                        NullabilityKind kind = it->second;
-
+                if (_Debug) {
+                    for (auto it : *map) {
+                        const VarDecl *decl = it.first;
+                        NullabilityKind kind = it.second.getNullability();
+                        
                         std::string x = "";
                         switch (kind) {
                             case NullabilityKind::Unspecified:
@@ -120,7 +115,7 @@ public:
                                 break;
                         }
                         
-                        DiagnosticsEngine &engine = Context.getDiagnostics();
+                        DiagnosticsEngine &engine = _ASTContext.getDiagnostics();
                         unsigned id = engine.getCustomDiagID(DiagnosticsEngine::Remark, "Variable nullability: %0");
                         engine.Report(decl->getLocation(), id) << x;
                     }
@@ -128,35 +123,37 @@ public:
                 
                 NullabilityCheckContext checkContext(*(methodDecl->getClassInterface()), *methodDecl);
 
-                MethodBodyChecker checker(Context, checkContext, calculator, env);
+                MethodBodyChecker checker(_ASTContext, checkContext, nullabilityCalculator, varEnv, _Filter);
                 checker.TraverseStmt(methodDecl->getBody());
             }
         }
+        
         return true;
     }
 
 private:
-    ASTContext &Context;
-    bool Debug;
+    ASTContext &_ASTContext;
+    bool _Debug;
+    std::vector<std::string> &_Filter;
 };
 
 class NullCheckConsumer : public ASTConsumer {
 public:
-    explicit NullCheckConsumer(bool debug) : ASTConsumer(), Debug(debug) {
-        
+    explicit NullCheckConsumer(bool debug, std::vector<std::string> &filter) : ASTConsumer(), _Debug(debug), _Filter(filter) {
     }
     
     virtual void HandleTranslationUnit(clang::ASTContext &Context) {
-        NullCheckVisitor visitor(Context, Debug);
+        NullCheckVisitor visitor(Context, _Debug, _Filter);
         visitor.TraverseDecl(Context.getTranslationUnitDecl());
     }
     
 private:
-    bool Debug;
+    bool _Debug;
+    std::vector<std::string> &_Filter;
 };
 
 std::unique_ptr<clang::ASTConsumer> NullCheckAction::CreateASTConsumer(CompilerInstance &Compiler, StringRef InFile) {
-    return std::unique_ptr<ASTConsumer>(new NullCheckConsumer(Debug));
+    return std::unique_ptr<ASTConsumer>(new NullCheckConsumer(Debug, Filter));
 }
 
 

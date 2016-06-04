@@ -1,6 +1,7 @@
 #include "iostream"
 
 #include "analyzer.h"
+#include "NullabilityDependencyCalculator.h"
 
 using namespace clang;
 
@@ -9,6 +10,36 @@ enum class NullabilityCompatibility : uint8_t {
     IncompatibleTopLevel,
     IncompatibleNested
 };
+
+DiagnosticBuilder MethodBodyChecker::WarningReport(SourceLocation location, std::set<std::string> &subjects) {
+    DiagnosticsEngine &diagEngine = _ASTContext.getDiagnostics();
+    DiagnosticsEngine::Level level;
+    
+    if (!_Filter.empty() && !subjects.empty()) {
+        level = DiagnosticsEngine::Ignored;
+        for (auto it : _Filter) {
+            if (subjects.find(it) != subjects.end()) {
+                level = DiagnosticsEngine::Warning;
+            }
+        }
+    } else {
+        level = DiagnosticsEngine::Warning;
+    }
+    
+    unsigned diagID = diagEngine.getCustomDiagID(level, "%0");
+    return diagEngine.Report(location, diagID);
+}
+
+DiagnosticBuilder MethodBodyChecker::WarningReport(clang::SourceLocation location, std::set<const clang::ObjCContainerDecl *> &subjects) {
+    std::set<std::string> names;
+    
+    for (auto decl : subjects) {
+        auto name = decl->getNameAsString();
+        names.insert(name);
+    }
+    
+    return WarningReport(location, names);
+}
 
 NullabilityCompatibility calculateNullabilityCompatibility(ASTContext &context, const Type *lhsType, NullabilityKind lhsKind, const Type *rhsType, NullabilityKind rhsKind) {
     if (lhsKind == NullabilityKind::NonNull) {
@@ -59,28 +90,52 @@ NullabilityCompatibility calculateNullabilityCompatibility(ASTContext &context, 
     return NullabilityCompatibility::Compatible;
 }
 
-//bool isCompatibleType(ASTContext &context, const Type *lhsType, NullabilityKind lhsKind, const Type *rhsType, NullabilityKind rhsKind) {
-//    return calculateNullabilityCompatibility(context, lhsType, lhsKind, rhsType, rhsKind) == NullabilityCompatibility::Compatible;
-//}
+NullabilityCompatibility calculateNullabilityCompatibility(ASTContext &context, const ExpressionNullability &lhs, const ExpressionNullability &rhs) {
+    return calculateNullabilityCompatibility(context, lhs.getType(), lhs.getNullability(), rhs.getType(), rhs.getNullability());
+}
+
+std::set<const ObjCContainerDecl *> MethodBodyChecker::subjectDecls(const Expr *expr) {
+    std::set<const ObjCContainerDecl *> decls;
+    
+    MethodUtility utility;
+    
+    NullabilityDependencyCalculator calculator(_ASTContext);
+    auto exprs = calculator.calculate(&_CheckContext.getMethodDecl(), expr);
+    
+    for (auto e : exprs) {
+        const ObjCMessageExpr *messageExpr = llvm::dyn_cast<ObjCMessageExpr>(e->IgnoreParenImpCasts());
+        if (messageExpr) {
+            auto ds = utility.enumerateContainers(messageExpr);
+            decls.insert(ds.begin(), ds.end());
+        }
+    }
+    
+    return decls;
+}
 
 bool MethodBodyChecker::VisitDeclStmt(DeclStmt *decl) {
-    DeclGroupRef group = decl->getDeclGroup();
-    DeclGroupRef::iterator it;
-    for(it = group.begin(); it != group.end(); it++) {
-        VarDecl *vd = llvm::dyn_cast<VarDecl>(*it);
+    for (auto it : decl->getDeclGroup()) {
+        const VarDecl *vd = llvm::dyn_cast<VarDecl>(it);
         if (vd) {
-            NullabilityKind varKind = NullabilityCalculator.VisitVarDecl(vd);
+            const Type *declType = vd->getType().getTypePtr();
+            NullabilityKind varKind = declType->getNullability(_ASTContext).getValueOr(NullabilityKind::Unspecified);
             
-            Expr *init = vd->getInit();
-            if (init && llvm::dyn_cast<ImplicitValueInitExpr>(init) == nullptr) {
-                NullabilityCompatibility compatibility = calculateNullabilityCompatibility(Context, vd->getType().getTypePtr(), varKind, init->getType().getTypePtr(), calculateNullability(init));
+            const Expr *init = vd->getInit();
+            if (init && !llvm::isa<ImplicitValueInitExpr>(init)) {
+                ExpressionNullability initNullability = _NullabilityCalculator.calculate(init);
+                NullabilityCompatibility compatibility = calculateNullabilityCompatibility(_ASTContext,
+                                                                                           declType, varKind,
+                                                                                           initNullability.getType(), initNullability.getNullability());
+                
+                auto subjects = subjectDecls(init);
+                subjects.insert(&_CheckContext.getInterfaceDecl());
                 
                 switch (compatibility) {
                     case NullabilityCompatibility::IncompatibleTopLevel:
-                        WarningReport(init->getExprLoc()) << "Nullability mismatch on variable declaration";
+                        WarningReport(init->getExprLoc(), subjects) << "Nullability mismatch on variable declaration";
                         break;
                     case NullabilityCompatibility::IncompatibleNested:
-                        WarningReport(init->getExprLoc()) << "Nullability mismatch inside block type on variable declaration";
+                        WarningReport(init->getExprLoc(), subjects) << "Nullability mismatch inside block type on variable declaration";
                         break;
                     case NullabilityCompatibility::Compatible:
                         // ok
@@ -93,34 +148,103 @@ bool MethodBodyChecker::VisitDeclStmt(DeclStmt *decl) {
     return true;
 }
 
+ObjCContainerDecl *MethodBodyChecker::InterfaceForSelector(const Expr *receiver, Selector selector) {
+    const ObjCObjectPointerType *pointerType = llvm::dyn_cast<ObjCObjectPointerType>(receiver->getType().getTypePtr()->getUnqualifiedDesugaredType());
+    if (pointerType) {
+        ObjCInterfaceDecl *decl = pointerType->getInterfaceDecl();
+        if (decl) {
+            // SomeClass *
+            while (decl) {
+                ObjCMethodDecl *method = decl->getMethod(selector, true);
+                if (method) {
+                    return decl;
+                }
+                
+                for (auto it = decl->protocol_begin(); it != decl->protocol_end(); it++) {
+                    ObjCProtocolDecl *protocol = *it;
+                    method = protocol->lookupMethod(selector, true);
+                    if (method) {
+                        return decl;
+                    }
+                }
+                
+                decl = decl->getSuperClass();
+            }
+        } else {
+            // id<Protocol>
+            unsigned protocols = pointerType->getNumProtocols();
+            
+            for (unsigned index = 0; index < protocols; index++) {
+                ObjCProtocolDecl *protocol = pointerType->getProtocol(index);
+                ObjCMethodDecl *method = protocol->lookupMethod(selector, true);
+                if (method) {
+                    return protocol;
+                }
+            }
+        }
+    }
+    
+    return nullptr;
+}
+
+std::string MethodBodyChecker::MethodCallSubjectAsString(const ObjCMessageExpr &expr) {
+    if (expr.isInstanceMessage()) {
+        const ObjCContainerDecl *interface = expr.getMethodDecl()->getClassInterface();
+        if (!interface) {
+            // Class interface lookup through method decl may fail, because of Protocols
+            interface = InterfaceForSelector(expr.getInstanceReceiver(), expr.getSelector());
+        }
+        
+        if (interface) {
+            return interface->getNameAsString();
+        }
+    }
+    
+    if (expr.isClassMessage()) {
+        QualType type = expr.getClassReceiver();
+        return type.getAsString();
+    }
+    
+    return "(not found)";
+}
+
+std::string MethodBodyChecker::MethodNameAsString(const ObjCMessageExpr &messageExpr) {
+    std::string interfaceName = MethodCallSubjectAsString(messageExpr);
+    std::string selector = messageExpr.getSelector().getAsString();
+    
+    std::string kind;
+    if (messageExpr.isInstanceMessage()) {
+        kind = "-";
+    } else {
+        kind = "+";
+    }
+    
+    return kind + "[" + interfaceName + " " + selector + "]";
+}
+
 bool MethodBodyChecker::VisitObjCMessageExpr(ObjCMessageExpr *callExpr) {
-    ObjCMethodDecl *decl = callExpr->getMethodDecl();
+    const ObjCMethodDecl *decl = callExpr->getMethodDecl();
     if (decl) {
         unsigned index = 0;
         
-        ObjCMethodDecl::param_iterator it;
-        for (it = decl->param_begin(); it != decl->param_end(); it++) {
-            ParmVarDecl *d = *it;
-            QualType paramQType = d->getType();
-            NullabilityKind paramNullability = paramQType.getTypePtr()->getNullability(Context).getValueOr(NullabilityKind::Nullable);
-            
-            Expr *arg = callExpr->getArg(index);
-            NullabilityKind argNullability = calculateNullability(arg);
-            
-            NullabilityCompatibility compatibility = calculateNullabilityCompatibility(Context, paramQType.getTypePtr(), paramNullability, arg->getType().getTypePtr(), argNullability);
-            if (compatibility != NullabilityCompatibility::Compatible) {
-                std::string interfaceName = decl->getClassInterface()->getNameAsString();
-                std::string selector = decl->getSelector().getAsString();
-                std::string kind;
-                ObjCMessageExpr::ReceiverKind receiverKind = callExpr->getReceiverKind();
-                if (receiverKind == ObjCMessageExpr::ReceiverKind::Instance || receiverKind == ObjCMessageExpr::ReceiverKind::SuperInstance) {
-                    kind = "-";
-                } else {
-                    kind = "+";
-                }
-                
-                std::string name = kind + "[" + interfaceName + " " + selector + "]";
+        std::string name = MethodNameAsString(*callExpr);
 
+        auto subjects = subjectDecls(callExpr);
+        subjects.insert(&_CheckContext.getInterfaceDecl());
+
+        for (auto it : decl->params()) {
+            const ParmVarDecl *d = it;
+            QualType paramQType = d->getType();
+            NullabilityKind paramNullability = paramQType.getTypePtr()->getNullability(_ASTContext).getValueOr(NullabilityKind::Unspecified);
+            
+            const Expr *arg = callExpr->getArg(index);
+            ExpressionNullability argNullability = _NullabilityCalculator.calculate(arg);
+            
+            NullabilityCompatibility compatibility = calculateNullabilityCompatibility(_ASTContext,
+                                                                                       paramQType.getTypePtr(), paramNullability,
+                                                                                       argNullability.getType(), argNullability.getNullability());
+                                                                                       
+            if (compatibility != NullabilityCompatibility::Compatible) {
                 std::string message;
                 
                 switch (compatibility) {
@@ -135,7 +259,7 @@ bool MethodBodyChecker::VisitObjCMessageExpr(ObjCMessageExpr *callExpr) {
                         break;
                 }
                 
-                WarningReport(arg->getExprLoc()) << message;
+                WarningReport(arg->getExprLoc(), subjects) << message;
             }
             
             index++;
@@ -146,20 +270,24 @@ bool MethodBodyChecker::VisitObjCMessageExpr(ObjCMessageExpr *callExpr) {
 }
 
 bool MethodBodyChecker::VisitBinAssign(BinaryOperator *assign) {
-    DeclRefExpr *lhs = llvm::dyn_cast<DeclRefExpr>(assign->getLHS());
-    Expr *rhs = assign->getRHS();
+    const DeclRefExpr *lhs = llvm::dyn_cast<DeclRefExpr>(assign->getLHS());
+    const Expr *rhs = assign->getRHS();
     
     if (lhs) {
-        NullabilityKind lhsNullability = calculateNullability(lhs);
-        NullabilityKind rhsNullability = calculateNullability(rhs);
+        auto lhsNullability = _NullabilityCalculator.calculate(lhs);
+        auto rhsNullability = _NullabilityCalculator.calculate(rhs);
         
-        NullabilityCompatibility compatibility = calculateNullabilityCompatibility(Context, lhs->getType().getTypePtr(), lhsNullability, rhs->getType().getTypePtr(), rhsNullability);
+        auto subjects = subjectDecls(rhs);
+        subjects.insert(&_CheckContext.getInterfaceDecl());
+
+        NullabilityCompatibility compatibility = calculateNullabilityCompatibility(_ASTContext, lhsNullability, rhsNullability);
+
         switch (compatibility) {
             case NullabilityCompatibility::IncompatibleTopLevel:
-                WarningReport(rhs->getExprLoc()) << "Nullability mismatch on assignment";
+                WarningReport(rhs->getExprLoc(), subjects) << "Nullability mismatch on assignment";
                 break;
             case NullabilityCompatibility::IncompatibleNested:
-                WarningReport(rhs->getExprLoc()) << "Nullability mismatch inside block type on assignment";
+                WarningReport(rhs->getExprLoc(), subjects) << "Nullability mismatch inside block type on assignment";
                 break;
             case NullabilityCompatibility::Compatible:
                 // ok
@@ -171,32 +299,34 @@ bool MethodBodyChecker::VisitBinAssign(BinaryOperator *assign) {
 }
 
 bool MethodBodyChecker::VisitReturnStmt(ReturnStmt *retStmt) {
-    Expr *value = retStmt->getRetValue();
+    const Expr *value = retStmt->getRetValue();
     if (value) {
-        const Type *returnType = CheckContext.getReturnType().getTypePtr();
+        const Type *returnType = _CheckContext.getReturnType().getTypePtr();
+        NullabilityKind returnKind = returnType->getNullability(_ASTContext).getValueOr(NullabilityKind::Unspecified);
         
-        const Type *valueType = value->getType().getTypePtr();
-        NullabilityKind valueKind = calculateNullability(value);
+        ExpressionNullability valueNullability = _NullabilityCalculator.calculate(value);
         
-        NullabilityCompatibility compatibility = calculateNullabilityCompatibility(Context, returnType, returnType->getNullability(Context).getValueOr(NullabilityKind::Nullable), valueType, valueKind);
+        NullabilityCompatibility compatibility = calculateNullabilityCompatibility(_ASTContext,
+                                                                                   returnType, returnKind,
+                                                                                   valueNullability.getType(), valueNullability.getNullability());
         if (compatibility != NullabilityCompatibility::Compatible) {
-            std::string className = CheckContext.getInterfaceDecl().getNameAsString();
-            std::string methodName = CheckContext.getMethodDecl().getSelector().getAsString();
-            std::string kind = CheckContext.getMethodDecl().isClassMethod() ? "+" : "-";
+            std::string className = _CheckContext.getInterfaceDecl().getNameAsString();
+            std::string methodName = _CheckContext.getMethodDecl().getSelector().getAsString();
+            std::string kind = _CheckContext.getMethodDecl().isClassMethod() ? "+" : "-";
             std::string name = kind + "[" + className + " " + methodName + "]";
             
             std::string message;
             
             switch (compatibility) {
                 case NullabilityCompatibility::IncompatibleTopLevel:
-                    if (CheckContext.getBlockExpr()) {
+                    if (_CheckContext.getBlockExpr()) {
                         message = "Block in " + name + " expects nonnull to return";
                     } else {
                         message = name + " expects nonnull to return";
                     }
                     break;
                 case NullabilityCompatibility::IncompatibleNested:
-                    if (CheckContext.getBlockExpr()) {
+                    if (_CheckContext.getBlockExpr()) {
                         message = "Does not return expected type for block in " + name;
                     } else {
                         message = "Does not return expected type for " + name;
@@ -207,9 +337,9 @@ bool MethodBodyChecker::VisitReturnStmt(ReturnStmt *retStmt) {
                     break;
             }
             
+            std::set<const ObjCContainerDecl *> subjects{ &_CheckContext.getInterfaceDecl() };
             
-            
-            WarningReport(value->getExprLoc()) << message;
+            WarningReport(value->getExprLoc(), subjects) << message;
         }
     }
     
@@ -220,11 +350,14 @@ bool MethodBodyChecker::VisitObjCArrayLiteral(ObjCArrayLiteral *literal) {
     unsigned count = literal->getNumElements();
     
     for (unsigned index = 0; index < count; index++) {
-        Expr *element = literal->getElement(index);
-        NullabilityKind elementKind = calculateNullability(element);
+        auto element = literal->getElement(index);
+        auto nullability = _NullabilityCalculator.calculate(element);
         
-        if (elementKind != NullabilityKind::NonNull) {
-            WarningReport(element->getExprLoc()) << "Array element should be nonnull";
+        if (!nullability.isNonNull()) {
+            std::string name = _CheckContext.getInterfaceDecl().getNameAsString();
+            auto subjects = std::set<std::string>{ name };
+
+            WarningReport(element->getExprLoc(), subjects) << "Array element should be nonnull";
         }
     }
     
@@ -237,14 +370,17 @@ bool MethodBodyChecker::VisitObjCDictionaryLiteral(ObjCDictionaryLiteral *litera
     for (unsigned index = 0; index < count; index++) {
         auto element = literal->getKeyValueElement(index);
         
-        auto keyKind = calculateNullability(element.Key);
-        if (keyKind != NullabilityKind::NonNull) {
-            WarningReport(element.Key->getExprLoc()) << "Dictionary key should be nonnull";
+        auto subjects = subjectDecls(literal);
+        subjects.insert(&_CheckContext.getInterfaceDecl());
+
+        auto keyNullability = _NullabilityCalculator.calculate(element.Key);
+        if (!keyNullability.isNonNull()) {
+            WarningReport(element.Key->getExprLoc(), subjects) << "Dictionary key should be nonnull";
         }
         
-        auto valueKind = calculateNullability(element.Value);
-        if (valueKind != NullabilityKind::NonNull) {
-            WarningReport(element.Value->getExprLoc()) << "Dictionary value should be nonnull";
+        auto valueNullability = _NullabilityCalculator.calculate(element.Value);
+        if (!valueNullability.isNonNull()) {
+            WarningReport(element.Value->getExprLoc(), subjects) << "Dictionary value should be nonnull";
         }
     }
     
@@ -252,18 +388,21 @@ bool MethodBodyChecker::VisitObjCDictionaryLiteral(ObjCDictionaryLiteral *litera
 }
 
 bool MethodBodyChecker::TraverseBlockExpr(BlockExpr *blockExpr) {
-    NullabilityCheckContext blockContext = CheckContext.newContextForBlock(blockExpr);
+    auto blockContext = _CheckContext.newContextForBlock(blockExpr);
     
-    MethodBodyChecker checker(Context,  blockContext, NullabilityCalculator, Env);
+    VariableNullabilityPropagation prop(_NullabilityCalculator, _VarEnv);
+    prop.propagate(blockExpr);
+    
+    MethodBodyChecker checker(_ASTContext, blockContext, _NullabilityCalculator, _VarEnv, _Filter);
     checker.TraverseStmt(blockExpr->getBody());
     
     return true;
 }
 
-VarDecl *declRefOrNULL(Expr *expr) {
-    DeclRefExpr *ref = llvm::dyn_cast<DeclRefExpr>(expr->IgnoreParenImpCasts());
+const VarDecl *declRefOrNULL(const Expr *expr) {
+    auto ref = llvm::dyn_cast<DeclRefExpr>(expr->IgnoreParenImpCasts());
     if (ref) {
-        ValueDecl *valueDecl = ref->getDecl();
+        auto valueDecl = ref->getDecl();
         return llvm::dyn_cast<VarDecl>(valueDecl);
     } else {
         return nullptr;
@@ -271,33 +410,33 @@ VarDecl *declRefOrNULL(Expr *expr) {
 }
 
 bool MethodBodyChecker::TraverseIfStmt(IfStmt *ifStmt) {
-    Expr *condition = ifStmt->getCond();
-    Stmt *thenStmt = ifStmt->getThen();
-    Stmt *elseStmt = ifStmt->getElse();
+    auto condition = ifStmt->getCond();
+    auto thenStmt = ifStmt->getThen();
+    auto elseStmt = ifStmt->getElse();
     
-    NullabilityKindEnvironment environment = NullabilityCalculator.getEnvironment();
-    ExprNullabilityCalculator calculator(Context, environment, NullabilityCalculator.isDebug());
-    LAndExprChecker exprChecker(Context, CheckContext, calculator, environment);
+    std::shared_ptr<VariableNullabilityEnvironment> varEnv(_VarEnv->newCopy());
+    ExpressionNullabilityCalculator calculator(_ASTContext, varEnv);
+    LAndExprChecker exprChecker(_ASTContext, _CheckContext, calculator, varEnv, _Filter);
     
-    VarDecl *decl = declRefOrNULL(condition);
+    const VarDecl *decl = declRefOrNULL(condition);
     if (decl) {
-        environment[decl] = NullabilityKind::NonNull;
+        varEnv->set(decl, decl->getType().getTypePtr(), NullabilityKind::NonNull);
     }
     
     exprChecker.TraverseStmt(condition);
     exprChecker.TraverseStmt(thenStmt);
     
     if (elseStmt) {
-        this->TraverseStmt(elseStmt);
+        TraverseStmt(elseStmt);
     }
     
     return true;
 }
 
 bool MethodBodyChecker::TraverseBinLAnd(BinaryOperator *land) {
-    NullabilityKindEnvironment environment = NullabilityCalculator.getEnvironment();
-    ExprNullabilityCalculator calculator(Context, environment, NullabilityCalculator.isDebug());
-    LAndExprChecker checker = LAndExprChecker(Context, CheckContext, calculator, environment);
+    std::shared_ptr<VariableNullabilityEnvironment> env(_VarEnv->newCopy());
+    ExpressionNullabilityCalculator calculator(_ASTContext, env);
+    LAndExprChecker checker = LAndExprChecker(_ASTContext, _CheckContext, calculator, env, _Filter);
     
     checker.TraverseStmt(land);
     
@@ -305,30 +444,30 @@ bool MethodBodyChecker::TraverseBinLAnd(BinaryOperator *land) {
 }
 
 bool MethodBodyChecker::VisitCStyleCastExpr(CStyleCastExpr *expr) {
-    Expr *subExpr = expr->getSubExpr();
+    auto srcExpr = expr->getSubExpr();
     
-    const Type *subExprType = subExpr->getType().getTypePtrOrNull();
-    const Type *type = expr->getType().getTypePtrOrNull();
+    auto srcNullability = _NullabilityCalculator.calculate(srcExpr);
+    auto destNullability = _NullabilityCalculator.calculate(expr);
     
-    if (subExprType && type) {
-        Optional<NullabilityKind> subExprKind = NullabilityCalculator.Visit(subExpr->IgnoreParenImpCasts());
-        Optional<NullabilityKind> exprKind = NullabilityCalculator.Visit(expr->IgnoreParenImpCasts());
+    auto sourceType = srcExpr->getType();
+    auto destType = expr->getType();
+    
+    if (destNullability.isNonNull()) {
+        bool castToSame = sourceType.getDesugaredType(_ASTContext) == destType.getDesugaredType(_ASTContext);
+        bool castFromID = srcNullability.getType()->isObjCIdType() || srcNullability.getType()->isObjCQualifiedIdType();
         
-        if (exprKind.getValueOr(NullabilityKind::Unspecified) == NullabilityKind::NonNull) {
-            bool castToSame = subExpr->getType().getDesugaredType(Context) == expr->getType().getDesugaredType(Context);
-            bool castFromID = subExprType->isObjCIdType() || subExprType->isObjCQualifiedIdType();
-            
-            if (subExprKind.getValueOr(NullabilityKind::Unspecified) == NullabilityKind::NonNull) {
-                if (castToSame || castFromID) {
-                    WarningReport(expr->getExprLoc()) << "Redundant cast to nonnull";
-                }
+        std::set<const ObjCContainerDecl *> subjects{ &_CheckContext.getInterfaceDecl() };
+        
+        if (srcNullability.isNonNull()) {
+            if (castToSame || castFromID) {
+                WarningReport(expr->getExprLoc(), subjects) << "Redundant cast to nonnull";
+            }
+        } else {
+            if (castToSame || castFromID) {
+                // Cast to same type with nonnull is okay
+                // Cast from ID is okay
             } else {
-                if (castToSame || castFromID) {
-                    // Cast to same type with nonnull is okay
-                    // Cast from ID is okay
-                } else {
-                    WarningReport(expr->getExprLoc()) << "Cast on nullability cannot change base type";
-                }
+                WarningReport(expr->getExprLoc(), subjects) << "Cast on nullability cannot change base type";
             }
         }
     }
@@ -337,35 +476,35 @@ bool MethodBodyChecker::VisitCStyleCastExpr(CStyleCastExpr *expr) {
 }
 
 bool LAndExprChecker::TraverseUnaryLNot(UnaryOperator *S) {
-    NullabilityKindEnvironment environment = NullabilityCalculator.getEnvironment();
-    ExprNullabilityCalculator calculator(Context, environment, NullabilityCalculator.isDebug());
-    MethodBodyChecker checker(Context, CheckContext, calculator, environment);
+    std::shared_ptr<VariableNullabilityEnvironment> env(_VarEnv->newCopy());
+    ExpressionNullabilityCalculator calculator(_ASTContext, env);
+    MethodBodyChecker checker(_ASTContext, _CheckContext, calculator, env, _Filter);
     
     return checker.TraverseStmt(S);
 }
 
 bool LAndExprChecker::TraverseBinLOr(BinaryOperator *lor) {
-    NullabilityKindEnvironment environment = NullabilityCalculator.getEnvironment();
-    ExprNullabilityCalculator calculator(Context, environment, NullabilityCalculator.isDebug());
-    MethodBodyChecker checker(Context, CheckContext, calculator, environment);
+    std::shared_ptr<VariableNullabilityEnvironment> env(_VarEnv->newCopy());
+    ExpressionNullabilityCalculator calculator(_ASTContext, env);
+    MethodBodyChecker checker(_ASTContext, _CheckContext, calculator, env, _Filter);
     
     return checker.TraverseStmt(lor);
 }
 
 bool LAndExprChecker::TraverseBinLAnd(BinaryOperator *land) {
-    Expr *lhs = land->getLHS();
+    auto lhs = land->getLHS();
     
-    VarDecl *lhsDecl = declRefOrNULL(lhs);
+    auto lhsDecl = declRefOrNULL(lhs);
     if (lhsDecl) {
-        Env[lhsDecl] = NullabilityKind::NonNull;
+        _VarEnv->set(lhsDecl, lhsDecl->getType().getTypePtr(), NullabilityKind::NonNull);
     } else {
         TraverseStmt(lhs);
     }
     
-    Expr *rhs = land->getRHS();
-    VarDecl *rhsDecl = declRefOrNULL(rhs);
+    auto rhs = land->getRHS();
+    auto rhsDecl = declRefOrNULL(rhs);
     if (rhsDecl) {
-        Env[rhsDecl] = NullabilityKind::NonNull;
+        _VarEnv->set(rhsDecl, rhsDecl->getType().getTypePtr(), NullabilityKind::NonNull);
     } else {
         TraverseStmt(rhs);
     }

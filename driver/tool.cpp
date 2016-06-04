@@ -18,6 +18,10 @@ static cl::opt<bool> DebugOption("debug",
                                  cl::desc("Enable debug mode (reports more verbosely)"),
                                  cl::cat(NullarihyonCategory));
 
+static cl::list<std::string> FilterOption("filter",
+                                          cl::desc("Class name to filter output"),
+                                          cl::cat(NullarihyonCategory));
+
 class NullCheckActionFactory : public FrontendActionFactory {
 public:
     explicit NullCheckActionFactory(NullCheckAction *action) {
@@ -38,6 +42,7 @@ int main(int argc, const char **argv) {
     
     auto action = new NullCheckAction;
     action->setDebug(DebugOption);
+    action->setFilter(FilterOption);
     
     NullCheckActionFactory *factory = new NullCheckActionFactory(action);
     
