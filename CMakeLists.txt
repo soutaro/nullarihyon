@@ -1,4 +1,4 @@
-cmake_minimum_required (VERSION 2.6)
+cmake_minimum_required (VERSION 3.0)
 project (Nullarihyon)
 
 if (NOT LLVM_ROOT)
@@ -98,6 +98,11 @@ SET(CMAKE_SKIP_BUILD_RPATH FALSE)
 SET(CMAKE_BUILD_WITH_INSTALL_RPATH FALSE)
 set (CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib/nullarihyon/${NULL_VERSION}")
 SET(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+
+# Setup precompiled header
+set (CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/CMake")
+include(cotire)
+set (COTIRE_MINIMUM_NUMBER_OF_TARGET_SOURCES 0)
 
 # Add source code
 add_subdirectory (src)

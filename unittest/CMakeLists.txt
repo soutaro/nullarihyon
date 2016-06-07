@@ -9,3 +9,7 @@ target_link_libraries (
   gtest_main
 )
 
+set_target_properties(UnitTest PROPERTIES
+  COTIRE_PREFIX_HEADER_INCLUDE_PATH ${CMAKE_SOURCE_DIR}/vendor
+  COTIRE_ADD_UNITY_BUILD FALSE)
+cotire(UnitTest)
