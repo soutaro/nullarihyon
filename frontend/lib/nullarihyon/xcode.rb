@@ -7,6 +7,7 @@ module Nullarihyon
     attr_reader :jobs
     attr_reader :env
     attr_reader :only_latest
+    attr_reader :project_path
 
     attr_accessor :debug
 
@@ -17,7 +18,8 @@ module Nullarihyon
       @env = env
       @only_latest = only_latest
 
-      @project = Xcodeproj::Project.open(env['PROJECT_FILE_PATH'])
+      @project_path = Pathname(env['PROJECT_FILE_PATH'])
+      @project = Xcodeproj::Project.open(@project_path)
       @target = @project.targets.find {|target| target.name == env['TARGETNAME']}
       @configuration = env["CONFIGURATION"]
       @build_dir = Pathname(env["CONFIGURATION_BUILD_DIR"])
@@ -55,6 +57,19 @@ module Nullarihyon
       Pathname(env["SDKROOT"])
     end
 
+    def filters
+      file = project_path.parent + "nullfilter"
+      if file.file?
+        file.readlines.map {|x|
+          x.chomp.gsub(/#(.*)/, "").strip
+        }.select {|filter|
+          filter.length > 0
+        }
+      else
+        []
+      end
+    end
+
     def configuration
       Configuration.new(analyzer_path, resource_dir_path).tap do |config|
         config.sysroot_path = sdkroot_path
@@ -63,6 +78,10 @@ module Nullarihyon
         config.modules_enabled = modules_enabled?
         config.assertions_blocked = true
         config.debug = debug
+
+        filters.each do |filter|
+          config.add_filter filter
+        end
 
         framework_search_paths.each do |path|
           config.add_header_search_path :framework, path

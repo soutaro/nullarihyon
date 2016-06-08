@@ -107,6 +107,14 @@ module Nullarihyon
           config.arch = :i386
           assert config.commandline.include?(["-arch", "i386"])
         end
+
+        it "contains -filter flags" do
+          config.add_filter "FooClass"
+          config.add_filter "BarClass"
+
+          assert config.commandline.include?(["-filter", "FooClass"])
+          assert config.commandline.include?(["-filter", "BarClass"])
+        end
       end
 
       describe ".sdk_paths" do

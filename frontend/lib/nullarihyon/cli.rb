@@ -22,6 +22,7 @@ module Nullarihyon
     option :modules, type: :boolean, default: true, desc: "Enable modules"
     option :block_assertions, type: :boolean, default: true, desc: "Ignore NSAssert family"
     option :arch, type: :string
+    option :filter, type: :array, default: [], desc: "Specify filter"
     def check(*files)
       config = Configuration.new(Pathname(options[:analyzer]).realpath, Pathname(options[:resource_dir]).realpath)
       config.arc_enabled = options[:arc]
@@ -29,6 +30,10 @@ module Nullarihyon
       config.assertions_blocked = options[:block_assertions]
       config.arch = options[:arch]
       config.debug = options[:debug]
+
+      options[:filter].each do |filter|
+        config.add_filter filter
+      end
 
       if options[:sdk]
         config.sysroot_path = CLI.sdks[options[:sdk]]

@@ -15,6 +15,8 @@ module Nullarihyon
 
     attr_accessor :debug
 
+    attr_reader :filters
+
     def initialize(analyzer_path, resource_dir_path)
       @analyzer_path = analyzer_path
       @resource_dir_path = resource_dir_path
@@ -26,10 +28,15 @@ module Nullarihyon
 
       @header_search_paths = []
       @other_flags = []
+      @filters = []
     end
 
     def add_header_search_path(kind, path)
       header_search_paths << [kind, path]
+    end
+
+    def add_filter(filter)
+      filters << filter
     end
 
     def add_other_flag(*args)
@@ -52,6 +59,10 @@ module Nullarihyon
 
       if debug
         array << "-debug"
+      end
+
+      filters.each do |filter|
+        array << ["-filter", filter]
       end
 
       array << "--"

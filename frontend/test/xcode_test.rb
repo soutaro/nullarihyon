@@ -103,6 +103,21 @@ module Nullarihyon
 
         assert xcode.configuration.debug
       end
+
+      it "reads filters from nullfilter file" do
+        filter_path = (Pathname(__dir__) + "data/TestProgram").realpath + "nullfilter"
+
+        begin
+          filter_path.open("w") do |io|
+            io.puts "ViewController"
+            io.puts "Foo"
+          end
+
+          assert_equal ["ViewController", "Foo"], xcode.configuration.filters
+        ensure
+          filter_path.unlink
+        end
+      end
     end
 
     describe "#sources" do
@@ -166,6 +181,38 @@ module Nullarihyon
     describe "#arch" do
       it "reads arch fron env" do
         assert_equal "x86_64", xcode.arch
+      end
+    end
+
+    describe "#filters" do
+      it "reads nullfilter" do
+        filter_path = (Pathname(__dir__) + "data/TestProgram").realpath + "nullfilter"
+
+        begin
+          filter_path.open("w") do |io|
+            io.puts "ViewController"
+            io.puts "Foo"
+          end
+
+          assert_equal ["ViewController", "Foo"], xcode.filters
+        ensure
+          filter_path.unlink
+        end
+      end
+
+      it "skips comments" do
+        filter_path = (Pathname(__dir__) + "data/TestProgram").realpath + "nullfilter"
+
+        begin
+          filter_path.open("w") do |io|
+            io.puts "ViewController # only ViewController"
+            io.puts "# Foo"
+          end
+
+          assert_equal ["ViewController"], xcode.filters
+        ensure
+          filter_path.unlink
+        end
       end
     end
 
