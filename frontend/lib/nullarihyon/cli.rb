@@ -12,6 +12,7 @@ module Nullarihyon
 
     class_option :analyzer, type: :string, desc: "Path to analyzer executable", default: $ANALYZER_PATH
     class_option :resource_dir, type: :string, desc: "Path to -resource-dir option", default: $RESOURCE_DIR_PATH
+    class_option :debug, type: :boolean, default: false, desc: "Enable debugging mode"
 
     desc "check FILE...", "Run analyzer for FILE"
     option :sdk, type: :string, enum: sdks.keys, desc: "Name of SDK (will be used for -isysroot option)"
@@ -27,6 +28,7 @@ module Nullarihyon
       config.modules_enabled = options[:modules]
       config.assertions_blocked = options[:block_assertions]
       config.arch = options[:arch]
+      config.debug = options[:debug]
 
       if options[:sdk]
         config.sysroot_path = CLI.sdks[options[:sdk]]
@@ -64,7 +66,9 @@ module Nullarihyon
         exit
       end
 
-      Xcode.new(Pathname(options[:analyzer]).realpath, Pathname(options[:resource_dir]).realpath, options[:jobs], options[:only_latest]).run(STDOUT)
+      Xcode.new(Pathname(options[:analyzer]).realpath, Pathname(options[:resource_dir]).realpath, options[:jobs], options[:only_latest]).tap do |xcode|
+        xcode.debug = options[:debug]
+      end.run(STDOUT)
     end
   end
 end

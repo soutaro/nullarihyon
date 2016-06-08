@@ -93,6 +93,11 @@ module Nullarihyon
           assert config.commandline.include?(["-isystem", (@dir + "isystem").to_s])
         end
 
+        it "contains -debug option" do
+          config.debug = true
+          assert config.commandline.include?("-debug")
+        end
+
         it "contains other flags" do
           config.add_other_flag "-arch", "i386"
           assert config.commandline.include?(["-arch", "i386"])

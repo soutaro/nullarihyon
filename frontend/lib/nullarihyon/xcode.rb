@@ -8,6 +8,8 @@ module Nullarihyon
     attr_reader :env
     attr_reader :only_latest
 
+    attr_accessor :debug
+
     def initialize(analyzer_path, resource_dir_path, jobs, only_latest, env=ENV)
       @analyzer_path = analyzer_path
       @resource_dir_path = resource_dir_path
@@ -19,6 +21,8 @@ module Nullarihyon
       @target = @project.targets.find {|target| target.name == env['TARGETNAME']}
       @configuration = env["CONFIGURATION"]
       @build_dir = Pathname(env["CONFIGURATION_BUILD_DIR"])
+
+      debug = false
     end
 
     def header_search_paths
@@ -58,6 +62,7 @@ module Nullarihyon
         config.arc_enabled = arc_enabled?
         config.modules_enabled = modules_enabled?
         config.assertions_blocked = true
+        config.debug = debug
 
         framework_search_paths.each do |path|
           config.add_header_search_path :framework, path

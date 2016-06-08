@@ -13,6 +13,8 @@ module Nullarihyon
     attr_reader :header_search_paths
     attr_reader :other_flags
 
+    attr_accessor :debug
+
     def initialize(analyzer_path, resource_dir_path)
       @analyzer_path = analyzer_path
       @resource_dir_path = resource_dir_path
@@ -20,6 +22,7 @@ module Nullarihyon
       arc_enabled = true
       modules_enabled = true
       assertions_blocked = true
+      debug = false
 
       @header_search_paths = []
       @other_flags = []
@@ -46,6 +49,10 @@ module Nullarihyon
       array << analyzer_path.to_s
 
       array += files.map {|path| path.to_s }
+
+      if debug
+        array << "-debug"
+      end
 
       array << "--"
 

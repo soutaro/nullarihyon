@@ -97,6 +97,12 @@ module Nullarihyon
       it "has other flags" do
         assert_equal %w(-iquote /some/directory -isystem /another/directory), xcode.configuration.other_flags
       end
+
+      it "has debug option from xcode" do
+        xcode.debug = true
+
+        assert xcode.configuration.debug
+      end
     end
 
     describe "#sources" do
