@@ -269,11 +269,27 @@ bool MethodBodyChecker::VisitObjCMessageExpr(ObjCMessageExpr *callExpr) {
     return true;
 }
 
+const VarDecl *declRefOrNULL(const Expr *expr) {
+    auto ref = llvm::dyn_cast<DeclRefExpr>(expr->IgnoreParenImpCasts());
+    if (ref) {
+        auto valueDecl = ref->getDecl();
+        return llvm::dyn_cast<VarDecl>(valueDecl);
+    } else {
+        return nullptr;
+    }
+}
+
 bool MethodBodyChecker::VisitBinAssign(BinaryOperator *assign) {
     const DeclRefExpr *lhs = llvm::dyn_cast<DeclRefExpr>(assign->getLHS());
     const Expr *rhs = assign->getRHS();
     
     if (lhs) {
+        auto var = declRefOrNULL(lhs);
+        if (var && var->getNameAsString() == "self") {
+            // Skip if assignment to self
+            return true;
+        }
+        
         auto lhsNullability = _NullabilityCalculator.calculate(lhs);
         auto rhsNullability = _NullabilityCalculator.calculate(rhs);
         
@@ -397,16 +413,6 @@ bool MethodBodyChecker::TraverseBlockExpr(BlockExpr *blockExpr) {
     checker.TraverseStmt(blockExpr->getBody());
     
     return true;
-}
-
-const VarDecl *declRefOrNULL(const Expr *expr) {
-    auto ref = llvm::dyn_cast<DeclRefExpr>(expr->IgnoreParenImpCasts());
-    if (ref) {
-        auto valueDecl = ref->getDecl();
-        return llvm::dyn_cast<VarDecl>(valueDecl);
-    } else {
-        return nullptr;
-    }
 }
 
 bool MethodBodyChecker::TraverseIfStmt(IfStmt *ifStmt) {
