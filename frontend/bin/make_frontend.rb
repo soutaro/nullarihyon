@@ -45,5 +45,5 @@ EOS
   FileUtils.chmod 0755, bin_path.to_s
   end
 else
-  puts "$ make_frontend.rb [AnalyzerPath] [ResourceDirPath] [ScriptLibDirPath]"
+  puts "$ make_frontend.rb [AnalyzerPath] [ResourceDirPath] [ScriptLibDirPath] [version]"
 end
