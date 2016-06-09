@@ -92,7 +92,7 @@ add_definitions (-D_GNU_SOURCE -DHAVE_CLANG_CONFIG_H)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${LLVM_CXX_FLAGS} -O0")
 
 # Version of this software
-set (NULL_VERSION 1.0.0)
+set (NULL_VERSION 1.2.0)
 
 # Setup RPATH for installation
 SET(CMAKE_SKIP_BUILD_RPATH FALSE)
@@ -128,4 +128,4 @@ ENDFOREACH(lib_path)
 # Generate nullarihyon command ruby script
 set (INSTALL_LIBEXEC_PREFIX ${CMAKE_INSTALL_PREFIX}/libexec/nullarihyon/${NULL_VERSION})
 set (INSTALL_LIB_PREFIX ${CMAKE_INSTALL_PREFIX}/lib/nullarihyon/${NULL_VERSION})
-install(CODE "execute_process(COMMAND /usr/bin/ruby ${PROJECT_SOURCE_DIR}/frontend/bin/make_frontend.rb ${CMAKE_INSTALL_PREFIX}/bin ${INSTALL_LIBEXEC_PREFIX}/nullarihyon-core ${INSTALL_LIB_PREFIX}/clang ${INSTALL_LIB_PREFIX}/frontend)")
+install(CODE "execute_process(COMMAND /usr/bin/ruby ${PROJECT_SOURCE_DIR}/frontend/bin/make_frontend.rb ${CMAKE_INSTALL_PREFIX}/bin ${INSTALL_LIBEXEC_PREFIX}/nullarihyon-core ${INSTALL_LIB_PREFIX}/clang ${INSTALL_LIB_PREFIX}/frontend ${NULL_VERSION})")

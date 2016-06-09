@@ -75,5 +75,10 @@ module Nullarihyon
         xcode.debug = options[:debug]
       end.run(STDOUT)
     end
+
+    desc "version", "Print version"
+    def version
+      puts "Nullarihyon version #{$VERSION}"
+    end
   end
 end
