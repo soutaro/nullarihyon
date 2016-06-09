@@ -108,7 +108,12 @@ public:
             
             NullabilityKind defaultKind = NullabilityKind::Unspecified;
             
-            if (selector == "class" || selector == "init" || selector == "alloc") {
+            std::set<std::string> nonnullMethods;
+            nonnullMethods.insert("class");
+            nonnullMethods.insert("init");
+            nonnullMethods.insert("alloc");
+            
+            if (nonnullMethods.find(selector) != nonnullMethods.end()) {
                 defaultKind = NullabilityKind::NonNull;
             }
             
@@ -119,7 +124,12 @@ public:
             const Type *retType = messageExpr->getMethodDecl()->getReturnType().getTypePtr();
             
             NullabilityKind defaultKind = NullabilityKind::Unspecified;
-            if (selector == "alloc") {
+            
+            std::set<std::string> nonnullMethods;
+            nonnullMethods.insert("class");
+            nonnullMethods.insert("alloc");
+            
+            if (nonnullMethods.find(selector) != nonnullMethods.end()) {
                 defaultKind = NullabilityKind::NonNull;
             }
             
