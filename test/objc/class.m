@@ -8,7 +8,8 @@
 @implementation Test
 
 - (void)test {
-  Class _Nonnull klass = [Test class];
+  Class _Nonnull klass1 = [Test class];
+  Class _Nonnull klass2 = [self class];
 }
 
 @end
