@@ -28,7 +28,7 @@
 }
 
 - (void)test3 {
-  id<NSObjectProtocol> x;
+  id<NSObject> x;
   NSString *a;
 
   a = (NSString * _Nonnull)x;

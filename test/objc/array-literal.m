@@ -2,12 +2,6 @@
 
 #import "polyfill.h"
 
-@interface NSArray ()
-
-+ (_Null_unspecified instancetype)arrayWithObjects:(const id _Nonnull [])objects count:(NSUInteger)count;
-
-@end
-
 @interface Test12 : NSObject
 
 @end
@@ -24,6 +18,4 @@
   NSArray<NSString *> * _Nonnull array = @[x]; //okay
 }
 
-
 @end
-

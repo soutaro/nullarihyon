@@ -10,7 +10,6 @@
 @implementation Test8
 
 - (void)test:(nonnull void(^)())block {
-
 }
 
 - (void)test2 {

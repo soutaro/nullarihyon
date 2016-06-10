@@ -2,14 +2,6 @@
 
 #import "polyfill.h"
 
-@interface NSDictionary
-
-+ (instancetype)dictionaryWithObjects:(const id _Nonnull [])objects
-                              forKeys:(const id<NSCopying> _Nonnull [])keys
-                                count:(NSUInteger)count;
-
-@end
-
 @interface Test : NSObject
 
 @end
