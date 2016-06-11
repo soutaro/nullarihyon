@@ -126,6 +126,10 @@ module Nullarihyon
       !object_path.file? || !result_path.file? || result_path.mtime < object_path.mtime
     end
 
+    def run_analyzer(source, commandline)
+      Open3.capture2e(*commandline)
+    end
+
     def check(config, source, objects_dir)
       io = StringIO.new
 
@@ -133,7 +137,7 @@ module Nullarihyon
       io.puts commandline.join(" ")
 
       if need_check?(source, objects_dir)
-        output, _ = Open3.capture2e(*commandline)
+        output, _ = run_analyzer(source, commandline)
 
         last_check_result_path(source, objects_dir).open("w") {|io| io.print output }
 

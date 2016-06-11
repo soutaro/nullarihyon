@@ -216,6 +216,63 @@ module Nullarihyon
       end
     end
 
+    describe '#run' do
+      it 'executes analyzer' do
+        test_program_dir = (Pathname(__dir__) + "data/TestProgram").realpath
+
+        trace = []
+        io = StringIO.new
+
+        xcode.define_singleton_method :run_analyzer do |source, _|
+          trace << source
+          ["Check result for #{source}\n", 0]
+        end
+
+        xcode.run(io)
+
+        # Should run analyzer against .m files
+        assert_equal([
+          test_program_dir + "TestProgram/ViewController.m",
+          test_program_dir + "TestProgram/AppDelegate.m",
+          test_program_dir + "TestProgram/main.m"
+        ].sort, trace.sort)
+
+        # Should print results
+        assert_match /Check result for #{test_program_dir + "TestProgram/ViewController.m"}/, io.string
+        assert_match /Check result for #{test_program_dir + "TestProgram/AppDelegate.m"}/, io.string
+        assert_match /Check result for #{test_program_dir + "TestProgram/main.m"}/, io.string
+      end
+
+      it 'executes analyzer only for updated files' do
+        test_program_dir = (Pathname(__dir__) + "data/TestProgram").realpath
+        objects_dir_path = xcode.objects_dir_path
+
+        FileUtils.touch(objects_dir_path + "ViewController.o", mtime: Time.utc(2016,4,1))
+        FileUtils.touch(objects_dir_path + "AppDelegate.o", mtime: Time.utc(2016,4,1))
+        FileUtils.touch(objects_dir_path + "main.o", mtime: Time.utc(2016,4,1))
+
+        # No need to check ViewController.m
+        FileUtils.touch(objects_dir_path + "ViewController.null", mtime: Time.utc(2016,4,2))
+        FileUtils.touch(objects_dir_path + "AppDelegate.m", mtime: Time.utc(2016,3,31))
+
+        trace = []
+        io = StringIO.new
+
+        xcode.define_singleton_method :run_analyzer do |source, _|
+          trace << source
+          ["Check result for #{source}\n", 0]
+        end
+
+        xcode.run(io)
+
+        # Should run analyzer against .m files
+        assert_equal([
+          test_program_dir + "TestProgram/AppDelegate.m",
+          test_program_dir + "TestProgram/main.m"
+        ].sort, trace.sort)
+      end
+    end
+
     describe ".tokenize_command_line" do
       it "splits command line to tokens" do
         assert_equal %w(a b c), Xcode.tokenize_command_line("a b c")
