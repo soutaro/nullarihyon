@@ -89,7 +89,7 @@ Warnings for files which is compiled during last build will be shown.
 Nullarihyon checks timestamp of compiled objects to see if the source code is updated or not.
 Add the new phase after `Compile Sources` phase.
 
-# On Boarding
+# Onboarding
 
 If you consider using Nullarihyon to existing project, the workflow would be like the following.
 
