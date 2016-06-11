@@ -130,13 +130,13 @@ module Nullarihyon
       Open3.capture2e(*commandline)
     end
 
-    def check(config, source, objects_dir)
+    def check(config, source, objects_dir, force)
       io = StringIO.new
 
       commandline = config.commandline(source).flatten
       io.puts commandline.join(" ")
 
-      if need_check?(source, objects_dir)
+      if force || need_check?(source, objects_dir)
         output, _ = run_analyzer(source, commandline)
 
         last_check_result_path(source, objects_dir).open("w") {|io| io.print output }
@@ -154,9 +154,21 @@ module Nullarihyon
       io.string
     end
 
+    def config_updated?(objects_dir, config)
+      config_path = objects_dir + "nullarihyon.config"
+      last_config = config_path.file? ? config_path.read : "no config"
+      new_config = config.commandline.flatten.to_s
+
+      config_path.open('w') {|io| io.write(new_config) }
+
+      last_config != new_config
+    end
+
     def run(io)
       config = configuration
       objects_dir = objects_dir_path
+
+      force = config_updated?(objects_dir, config)
 
       input_queue = Queue.new
       output_queue = Queue.new
@@ -174,7 +186,7 @@ module Nullarihyon
             path = input_queue.pop
             break if path == :done
 
-            output = check(config, path, objects_dir)
+            output = check(config, path, objects_dir, force)
 
             output_queue << output
           end
