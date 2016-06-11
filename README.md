@@ -89,6 +89,23 @@ Warnings for files which is compiled during last build will be shown.
 Nullarihyon checks timestamp of compiled objects to see if the source code is updated or not.
 Add the new phase after `Compile Sources` phase.
 
+# On Boarding
+
+If you consider using Nullarihyon to existing project, the workflow would be like the following.
+
+1. Find working set of classes
+2. Setup filtering for the classes
+3. Add `NS_ASSUME_NONNULL_BEGIN` / `NS_ASSUME_NONNULL_END` to its `.h` and `.m`
+4. Run the tool
+5. Fix warnings
+
+Nullarihyon would report thouthands of warnings.
+It should be better to have a working set with small number of classes.
+Focus tens of warnings and fix them.
+And, go next classes.
+
+Filtering is explained at [wiki page](https://github.com/soutaro/nullarihyon/wiki/Filtering). Take a look at it.
+
 # Fixing Warnings
 
 To fix nullability warnings, there are things you can do.
@@ -209,13 +226,10 @@ if (x && y) {
 
 The nullability modification works only with variable reference.
 
-# Assumptions
+# Rules
 
-There are a few assumptions introduced by Nullarihyon.
-
-* `self` is `_Nonnull`
-* Loop variables are `_Nonnull`
-* `alloc` and `init` returns `_Nonnull` if it does not declare to return `_Nullable`
+Take a look at [wiki page](https://github.com/soutaro/nullarihyon/wiki/Rules) to see the rules of Nullarihyon.
+It has some assumptions to minimize number of trivial false positives.
 
 # Limitation
 
@@ -223,18 +237,6 @@ There are a few assumptions introduced by Nullarihyon.
 * It does not support per-file build setting in Xcode
 * It does not support arm architectures (just skip checking)
 
-# Nullability Check
-
-This tool checks nullability on:
-
-* Local variable assignment with initial value
-* Local variable assignment
-* Objective-C method call
-* Returning value
-
-If *expected* type has `_Nonnull` attribute, and *actual* type does not have, the tool reports warnings.
-
 ## Known Issue
 
-* It does not check params and return types for block types (block type itself is checked)
 * `[self alloc]` does not return `instancetype` but `id` (analysis by Clang compiler)
