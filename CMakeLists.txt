@@ -92,7 +92,7 @@ add_definitions (-D_GNU_SOURCE -DHAVE_CLANG_CONFIG_H)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${LLVM_CXX_FLAGS} -O0")
 
 # Version of this software
-set (NULL_VERSION 1.3.0)
+set (NULL_VERSION 1.4.0)
 
 # Setup RPATH for installation
 SET(CMAKE_SKIP_BUILD_RPATH FALSE)
