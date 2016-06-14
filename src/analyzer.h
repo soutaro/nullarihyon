@@ -76,6 +76,7 @@ public:
     virtual bool TraverseIfStmt(IfStmt *ifStmt);
     virtual bool TraverseBinLAnd(BinaryOperator *land);
     virtual bool VisitCStyleCastExpr(CStyleCastExpr *expr);
+    virtual bool VisitBinaryConditionalOperator(BinaryConditionalOperator *expr);
     
     virtual bool TraverseBinLOr(BinaryOperator *lor) { return RecursiveASTVisitor::TraverseBinLOr(lor); };
     virtual bool TraverseUnaryLNot(UnaryOperator *lnot) { return RecursiveASTVisitor::TraverseUnaryLNot(lnot); };

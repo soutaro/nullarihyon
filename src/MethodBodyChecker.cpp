@@ -270,7 +270,12 @@ bool MethodBodyChecker::VisitObjCMessageExpr(ObjCMessageExpr *callExpr) {
 }
 
 const VarDecl *declRefOrNULL(const Expr *expr) {
+    if (llvm::isa<OpaqueValueExpr>(expr)) {
+        expr = llvm::dyn_cast<OpaqueValueExpr>(expr)->getSourceExpr();
+    }
+    
     auto ref = llvm::dyn_cast<DeclRefExpr>(expr->IgnoreParenImpCasts());
+    
     if (ref) {
         auto valueDecl = ref->getDecl();
         return llvm::dyn_cast<VarDecl>(valueDecl);
@@ -412,6 +417,24 @@ bool MethodBodyChecker::TraverseBlockExpr(BlockExpr *blockExpr) {
     MethodBodyChecker checker(_ASTContext, blockContext, _NullabilityCalculator, _VarEnv, _Filter);
     checker.TraverseStmt(blockExpr->getBody());
     
+    return true;
+}
+
+bool MethodBodyChecker::VisitBinaryConditionalOperator(clang::BinaryConditionalOperator *S) {
+    auto cond = S->getCond();
+    
+    ExpressionNullability nullability = _NullabilityCalculator.calculate(cond);
+    const Type *type = nullability.getType();
+    
+    if (type->isObjCObjectPointerType() || type->isBlockPointerType() || type->isObjCIdType()) {
+        if (nullability.isNonNull()) {
+            auto subjects = subjectDecls(cond);
+            subjects.insert(&_CheckContext.getInterfaceDecl());
+            
+            WarningReport(cond->getExprLoc(), subjects) << "Conditional operator looks redundant";
+        }
+    }
+
     return true;
 }
 
