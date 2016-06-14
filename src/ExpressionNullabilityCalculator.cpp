@@ -162,6 +162,10 @@ public:
     ExpressionNullability VisitBinAssign(const BinaryOperator *expr) {
         return recursion(expr->getRHS());
     }
+    
+    ExpressionNullability VisitObjCSelectorExpr(const ObjCSelectorExpr *expr) {
+        return ExpressionNullability(expr->getType().getTypePtr(), NullabilityKind::NonNull);
+    }
 };
 
 ExpressionNullability ExpressionNullabilityCalculator::calculate(const clang::Expr *expr) {
