@@ -70,6 +70,12 @@ module Nullarihyon
       end
     end
 
+    def prefix_header_path
+      if env["GCC_PRECOMPILE_PREFIX_HEADER"] == "YES"
+        Pathname(env["GCC_PREFIX_HEADER"])
+      end
+    end
+
     def configuration
       Configuration.new(analyzer_path, resource_dir_path).tap do |config|
         config.sysroot_path = sdkroot_path
@@ -97,6 +103,10 @@ module Nullarihyon
 
         other_cflags.each do |flag|
           config.add_other_flag flag
+        end
+
+        if prefix_header_path && prefix_header_path.file?
+          config.add_other_flag "-include", prefix_header_path.realpath.to_s
         end
       end
     end

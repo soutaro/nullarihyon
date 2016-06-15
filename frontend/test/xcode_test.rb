@@ -155,6 +155,19 @@ module Nullarihyon
       end
     end
 
+    describe "#prefix_header_path" do
+      it "returns nil if GCC_PRECOMPILE_PREFIX_HEADER is not YES" do
+        assert_nil xcode.prefix_header_path
+      end
+
+      it "returns GCC_PREFIX_HEADER if GCC_PRECOMPILE_PREFIX_HEADER is YES" do
+        env["GCC_PREFIX_HEADER"] = "TheProduct.pch"
+        env["GCC_PRECOMPILE_PREFIX_HEADER"] = "YES"
+
+        assert_equal Pathname("TheProduct.pch"), xcode.prefix_header_path
+      end
+    end
+
     describe "#other_cflags" do
       it "returns OTHER_CFLAGS from env" do
         assert_equal %w(-iquote /some/directory -isystem /another/directory), xcode.other_cflags
