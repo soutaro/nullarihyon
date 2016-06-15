@@ -233,7 +233,6 @@ It has some assumptions to minimize number of trivial false positives.
 
 # Limitation
 
-* It does not support prefix headers
 * It does not support per-file build setting in Xcode
 * It does not support arm architectures (just skip checking)
 
