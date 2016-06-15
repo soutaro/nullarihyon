@@ -44,6 +44,7 @@ module Nullarihyon
         "OBJECT_FILE_DIR_normal" => (@build_dir + "TestProgram.build/Objects-normal").to_s,
         "arch" => "x86_64",
         "variant" => "normal",
+        "TARGET_TEMP_DIR" => (@build_dir + "TestProgram.build/Objects-normal/x86_64/TestProgram.build").to_s
       }
     }
 

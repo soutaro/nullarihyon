@@ -76,6 +76,11 @@ module Nullarihyon
       end
     end
 
+    def hmap_paths
+      temp_dir_path = Pathname(env["TARGET_TEMP_DIR"])
+      Dir.glob((temp_dir_path + "*.hmap").to_s)
+    end
+
     def configuration
       Configuration.new(analyzer_path, resource_dir_path).tap do |config|
         config.sysroot_path = sdkroot_path
@@ -98,6 +103,10 @@ module Nullarihyon
         end
 
         config.add_header_search_path :include, objects_dir_path
+
+        hmap_paths.each do |path|
+          config.add_header_search_path :include, path
+        end
 
         config.arch = arch
 
