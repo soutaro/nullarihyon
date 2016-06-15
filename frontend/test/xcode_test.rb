@@ -119,6 +119,14 @@ module Nullarihyon
           filter_path.unlink
         end
       end
+
+      it "has preprocessor definitions from ENV" do
+        env["GCC_PREPROCESSOR_DEFINITIONS"] = "A=1 B=2"
+        flags = xcode.configuration.other_flags
+
+        assert flags.include?("-DA=1")
+        assert flags.include?("-DB=2")
+      end
     end
 
     describe "#sources" do
@@ -227,6 +235,13 @@ module Nullarihyon
         ensure
           filter_path.unlink
         end
+      end
+    end
+
+    describe "#preprocessor_definitions" do
+      it "reads PP symbols from env" do
+        env["GCC_PREPROCESSOR_DEFINITIONS"] = "A=1 B=2"
+        assert_equal ["A=1", "B=2"], xcode.preprocessor_definitions
       end
     end
 

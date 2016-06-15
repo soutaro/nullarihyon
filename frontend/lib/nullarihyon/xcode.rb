@@ -81,6 +81,10 @@ module Nullarihyon
       Dir.glob((temp_dir_path + "*.hmap").to_s)
     end
 
+    def preprocessor_definitions
+      self.class.tokenize_command_line(env["GCC_PREPROCESSOR_DEFINITIONS"])
+    end
+
     def configuration
       Configuration.new(analyzer_path, resource_dir_path).tap do |config|
         config.sysroot_path = sdkroot_path
@@ -112,6 +116,10 @@ module Nullarihyon
 
         other_cflags.each do |flag|
           config.add_other_flag flag
+        end
+
+        preprocessor_definitions.each do |opt|
+          config.add_other_flag "-D#{opt}"
         end
 
         if prefix_header_path && prefix_header_path.file?
