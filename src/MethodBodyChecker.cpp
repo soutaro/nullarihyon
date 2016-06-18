@@ -426,7 +426,7 @@ bool MethodBodyChecker::VisitBinaryConditionalOperator(clang::BinaryConditionalO
     ExpressionNullability nullability = _NullabilityCalculator.calculate(cond);
     const Type *type = nullability.getType();
     
-    if (type->isObjCObjectPointerType() || type->isBlockPointerType() || type->isObjCIdType()) {
+    if (isPointerType(type)) {
         if (nullability.isNonNull()) {
             auto subjects = subjectDecls(cond);
             subjects.insert(&_CheckContext.getInterfaceDecl());
@@ -540,6 +540,4 @@ bool LAndExprChecker::TraverseBinLAnd(BinaryOperator *land) {
     
     return true;
 }
-
-
 

@@ -54,11 +54,12 @@ public:
             || llvm::isa<ObjCBoxedExpr>(expr)
             || llvm::isa<ObjCArrayLiteral>(expr)
             || llvm::isa<ObjCDictionaryLiteral>(expr)
+            || llvm::isa<BlockExpr>(expr)
             ) {
             return false;
         }
         
-        return type->isPointerType() || type->isObjCObjectPointerType() || type->isObjCIdType();
+        return isPointerType(type);
     }
     
     ExpressionNullability VisitDeclRefExpr(const DeclRefExpr *ref) {
@@ -172,4 +173,8 @@ public:
 ExpressionNullability ExpressionNullabilityCalculator::calculate(const clang::Expr *expr) {
     auto visitor = ExpressionNullabilityCalculationVisitor(_ASTContext, _VarEnv);
     return visitor.Visit(expr->IgnoreParenImpCasts());
+}
+
+bool isPointerType(const Type *type) {
+    return type->isPointerType() || type->isBlockPointerType() || type->isObjCObjectPointerType() || type->isObjCIdType();
 }

@@ -17,7 +17,7 @@ public:
         const Type *type = decl->getType().getTypePtr();
         auto nullability = type->getNullability(_NullabilityCalculator.getASTContext());
         
-        if (type->isPointerType() || type->isObjCObjectPointerType() || type->isBlockPointerType()) {
+        if (isPointerType(type)) {
             if (!nullability.hasValue()) {
                 auto init = decl->getInit();
                 if (init && !llvm::isa<ImplicitValueInitExpr>(init)) {
@@ -44,7 +44,7 @@ public:
                 if (varDecl) {
                     auto type = varDecl->getType().getTypePtr();
                     
-                    if (type->isPointerType() || type->isObjCObjectPointerType() || type->isBlockPointerType()) {
+                    if (isPointerType(type)) {
                         Optional<NullabilityKind> kind = type->getNullability(_NullabilityCalculator.getASTContext());
                         if (!kind.hasValue()) {
                             _VarEnv->set(varDecl, type, NullabilityKind::NonNull);

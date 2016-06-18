@@ -80,5 +80,9 @@ public:
     void propagate(clang::BlockExpr *blockExpr);
 };
 
+/**
+ Return true if type is a pointer to something.
+ */
+bool isPointerType(const clang::Type *type);
 
 #endif

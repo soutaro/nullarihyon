@@ -483,3 +483,128 @@ TEST(ExpressionNullabilityCalculator, new) {
     const Expr *expr = builder.getTestExpr();
     ASSERT_TRUE(calculator.calculate(expr).isNonNull());
 }
+
+TEST(isPointerType, pointer_to_int) {
+    ASTBuilder builder("@interface Test : NSObject\n"
+                       "@end\n"
+                       "@implementation Test\n"
+                       "- (void)hello {\n"
+                       "  int *x;\n"
+                       "  int *testee = x;"
+                       "}\n"
+                       "@end\n");
+    
+    std::shared_ptr<VariableNullabilityMapping> map(new VariableNullabilityMapping);
+    std::shared_ptr<VariableNullabilityEnvironment> env(new VariableNullabilityEnvironment(builder.getASTContext(), map));
+    ExpressionNullabilityCalculator calculator(builder.getASTContext(), env);
+    
+    auto type = builder.getTestExpr()->getType().getTypePtr();
+    ASSERT_TRUE(isPointerType(type));
+}
+
+TEST(isPointerType, int) {
+    ASTBuilder builder("@interface Test : NSObject\n"
+                       "@end\n"
+                       "@implementation Test\n"
+                       "- (void)hello {\n"
+                       "  int x;\n"
+                       "  int testee = x;"
+                       "}\n"
+                       "@end\n");
+    
+    std::shared_ptr<VariableNullabilityMapping> map(new VariableNullabilityMapping);
+    std::shared_ptr<VariableNullabilityEnvironment> env(new VariableNullabilityEnvironment(builder.getASTContext(), map));
+    ExpressionNullabilityCalculator calculator(builder.getASTContext(), env);
+    
+    auto type = builder.getTestExpr()->getType().getTypePtr();
+    ASSERT_FALSE(isPointerType(type));
+}
+
+TEST(isPointerType, id) {
+    ASTBuilder builder("@interface Test : NSObject\n"
+                       "@end\n"
+                       "@implementation Test\n"
+                       "- (void)hello {\n"
+                       "  id x;\n"
+                       "  id testee = x;"
+                       "}\n"
+                       "@end\n");
+    
+    std::shared_ptr<VariableNullabilityMapping> map(new VariableNullabilityMapping);
+    std::shared_ptr<VariableNullabilityEnvironment> env(new VariableNullabilityEnvironment(builder.getASTContext(), map));
+    ExpressionNullabilityCalculator calculator(builder.getASTContext(), env);
+    
+    auto type = builder.getTestExpr()->getType().getTypePtr();
+    ASSERT_TRUE(isPointerType(type));
+}
+
+TEST(isPointerType, ObjcObject) {
+    ASTBuilder builder("@interface Test : NSObject\n"
+                       "@end\n"
+                       "@implementation Test\n"
+                       "- (void)hello {\n"
+                       "  NSObject *x;\n"
+                       "  id testee = x;"
+                       "}\n"
+                       "@end\n");
+    
+    std::shared_ptr<VariableNullabilityMapping> map(new VariableNullabilityMapping);
+    std::shared_ptr<VariableNullabilityEnvironment> env(new VariableNullabilityEnvironment(builder.getASTContext(), map));
+    ExpressionNullabilityCalculator calculator(builder.getASTContext(), env);
+    
+    auto type = builder.getTestExpr()->getType().getTypePtr();
+    ASSERT_TRUE(isPointerType(type));
+}
+
+TEST(isPointerType, pointer_to_ObjcObject) {
+    ASTBuilder builder("@interface Test : NSObject\n"
+                       "@end\n"
+                       "@implementation Test\n"
+                       "- (void)hello {\n"
+                       "  NSObject **x;\n"
+                       "  id testee = x;"
+                       "}\n"
+                       "@end\n");
+    
+    std::shared_ptr<VariableNullabilityMapping> map(new VariableNullabilityMapping);
+    std::shared_ptr<VariableNullabilityEnvironment> env(new VariableNullabilityEnvironment(builder.getASTContext(), map));
+    ExpressionNullabilityCalculator calculator(builder.getASTContext(), env);
+    
+    auto type = builder.getTestExpr()->getType().getTypePtr();
+    ASSERT_TRUE(isPointerType(type));
+}
+
+TEST(isPointerType, Class) {
+    ASTBuilder builder("@interface Test : NSObject\n"
+                       "@end\n"
+                       "@implementation Test\n"
+                       "- (void)hello {\n"
+                       "  Class x;\n"
+                       "  id testee = x;"
+                       "}\n"
+                       "@end\n");
+    
+    std::shared_ptr<VariableNullabilityMapping> map(new VariableNullabilityMapping);
+    std::shared_ptr<VariableNullabilityEnvironment> env(new VariableNullabilityEnvironment(builder.getASTContext(), map));
+    ExpressionNullabilityCalculator calculator(builder.getASTContext(), env);
+    
+    auto type = builder.getTestExpr()->getType().getTypePtr();
+    ASSERT_TRUE(isPointerType(type));
+}
+
+TEST(isPointerType, block) {
+    ASTBuilder builder("@interface Test : NSObject\n"
+                       "@end\n"
+                       "@implementation Test\n"
+                       "- (void)hello {\n"
+                       "  id testee = ^{};"
+                       "}\n"
+                       "@end\n");
+    
+    std::shared_ptr<VariableNullabilityMapping> map(new VariableNullabilityMapping);
+    std::shared_ptr<VariableNullabilityEnvironment> env(new VariableNullabilityEnvironment(builder.getASTContext(), map));
+    ExpressionNullabilityCalculator calculator(builder.getASTContext(), env);
+    
+    auto type = builder.getTestExpr()->getType().getTypePtr();
+    ASSERT_TRUE(isPointerType(type));
+}
