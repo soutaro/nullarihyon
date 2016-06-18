@@ -465,3 +465,21 @@ TEST(ExpressionNullabilityCalculator, selector) {
     const Expr *expr = builder.getTestExpr();
     ASSERT_TRUE(calculator.calculate(expr).isNonNull());
 }
+
+TEST(ExpressionNullabilityCalculator, new) {
+    ASTBuilder builder("@interface Test : NSObject\n"
+                       "+ (instancetype)new;"
+                       "@end\n"
+                       "@implementation Test\n"
+                       "- (void)hello {\n"
+                       "  id testee = [Test new];"
+                       "}\n"
+                       "@end\n");
+    
+    std::shared_ptr<VariableNullabilityMapping> map(new VariableNullabilityMapping);
+    std::shared_ptr<VariableNullabilityEnvironment> env(new VariableNullabilityEnvironment(builder.getASTContext(), map));
+    ExpressionNullabilityCalculator calculator(builder.getASTContext(), env);
+    
+    const Expr *expr = builder.getTestExpr();
+    ASSERT_TRUE(calculator.calculate(expr).isNonNull());
+}

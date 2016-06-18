@@ -8,6 +8,7 @@ __attribute__((objc_root_class))
 
 + (instancetype)alloc;
 + (Class)class;
++ (instancetype)new;
 
 - (instancetype)init;
 - (Class)class;

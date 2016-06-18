@@ -128,6 +128,7 @@ public:
             std::set<std::string> nonnullMethods;
             nonnullMethods.insert("class");
             nonnullMethods.insert("alloc");
+            nonnullMethods.insert("new");
             
             if (nonnullMethods.find(selector) != nonnullMethods.end()) {
                 defaultKind = NullabilityKind::NonNull;
