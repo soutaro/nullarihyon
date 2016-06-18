@@ -1,3 +1,6 @@
+#ifndef __ANALYZER_H__
+#define __ANALYZER_H__
+
 #include <unordered_map>
 #include <set>
 
@@ -120,3 +123,5 @@ private:
     bool Debug;
     std::vector<std::string> Filter;
 };
+
+#endif
