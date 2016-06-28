@@ -34,6 +34,20 @@ weak_ptr<IvarInfo> findIvarInfo(set<shared_ptr<IvarInfo>> &set, const ObjCMethod
     return result;
 }
 
+bool isInitializerMethod(clang::ObjCMethodDecl *methodDecl) {
+    for (auto attr : methodDecl->attrs()) {
+        auto annot = llvm::dyn_cast<AnnotateAttr>(attr);
+        if (annot) {
+            std::string annotation = annot->getAnnotation();
+            if (annotation == "nlh_initializer") {
+                return true;
+            }
+        }
+    }
+    
+    return false;
+}
+
 class InitializerCheckerImpl : public RecursiveASTVisitor<InitializerCheckerImpl> {
     clang::ASTContext &_ASTContext;
     set<shared_ptr<IvarInfo>> &_NonnullIvars;
@@ -46,6 +60,19 @@ public:
         auto info = findIvarInfo(_NonnullIvars, decl);
         if (!info.expired()) {
             _NonnullIvars.erase(info.lock());
+        }
+        
+        if (isInitializerMethod(decl)) {
+            auto receiver = messageExpr->getInstanceReceiver();
+            if (receiver) {
+                auto varRef = llvm::dyn_cast<DeclRefExpr>(receiver->IgnoreParenImpCasts());
+                
+                if (varRef) {
+                    if (varRef->getDecl()->getNameAsString() == "self") {
+                        _NonnullIvars.clear();
+                    }
+                }
+            }
         }
         
         return true;
@@ -100,7 +127,7 @@ std::set<shared_ptr<IvarInfo>> InitializerChecker::getNonnullIvars() {
 }
 
 set<shared_ptr<IvarInfo>> InitializerChecker::check(clang::ObjCMethodDecl *methodDecl) {
-    if (!isInitializer(methodDecl)) {
+    if (!isInitializerMethod(methodDecl)) {
         return set<shared_ptr<IvarInfo>>();
     }
     
@@ -112,16 +139,3 @@ set<shared_ptr<IvarInfo>> InitializerChecker::check(clang::ObjCMethodDecl *metho
     return nonnullIvars;
 }
 
-bool InitializerChecker::isInitializer(clang::ObjCMethodDecl *methodDecl) {
-    for (auto attr : methodDecl->attrs()) {
-        auto annot = llvm::dyn_cast<AnnotateAttr>(attr);
-        if (annot) {
-            std::string annotation = annot->getAnnotation();
-            if (annotation == "nlh_initializer") {
-                return true;
-            }
-        }
-    }
-    
-    return false;
-}

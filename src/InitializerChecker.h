@@ -37,7 +37,6 @@ public:
     }
     
     std::set<std::shared_ptr<IvarInfo>> check(clang::ObjCMethodDecl *methodDecl);
-    bool isInitializer(clang::ObjCMethodDecl *methodDecl);
     std::set<std::shared_ptr<IvarInfo>> getNonnullIvars();
 };
 
