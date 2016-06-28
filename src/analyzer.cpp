@@ -2,12 +2,14 @@
 #include <iostream>
 #include <stack>
 #include <unordered_map>
+#include <sstream>
 
 #include <clang/AST/ASTConsumer.h>
 #include <clang/AST/StmtVisitor.h>
 #include <clang/AST/RecursiveASTVisitor.h>
 
 #include "analyzer.h"
+#include "InitializerChecker.h"
 
 using namespace llvm;
 using namespace clang;
@@ -137,6 +139,40 @@ private:
     std::vector<std::string> &_Filter;
 };
 
+class InitializerCheckerVisitor : public RecursiveASTVisitor<InitializerCheckerVisitor> {
+    ASTContext &_ASTContext;
+    bool _Debug;
+public:
+    InitializerCheckerVisitor(ASTContext &astContext, bool debug) : _ASTContext(astContext), _Debug(debug) {}
+    
+    bool TraverseObjCImplementationDecl(ObjCImplementationDecl *decl) {
+        InitializerChecker checker(_ASTContext, decl);
+        
+        for (auto methodDecl : decl->methods()) {
+            auto uninitializedVars = checker.check(methodDecl);
+            
+            if (!uninitializedVars.empty()) {
+                std::stringstream names;
+                bool first = true;
+                for (auto info : uninitializedVars) {
+                    if (first) {
+                        first = false;
+                    } else {
+                        names << ", ";
+                    }
+                    names << info->getIvarDecl()->getNameAsString();
+                }
+                
+                DiagnosticsEngine &engine = _ASTContext.getDiagnostics();
+                unsigned id = engine.getCustomDiagID(DiagnosticsEngine::Warning, "Nonnull ivar should be initialized: %0");
+                engine.Report(methodDecl->getLocation(), id) << names.str();
+            }
+        }
+        
+        return true;
+    }
+};
+
 class NullCheckConsumer : public ASTConsumer {
 public:
     explicit NullCheckConsumer(bool debug, std::vector<std::string> &filter) : ASTConsumer(), _Debug(debug), _Filter(filter) {
@@ -145,6 +181,9 @@ public:
     virtual void HandleTranslationUnit(clang::ASTContext &Context) {
         NullCheckVisitor visitor(Context, _Debug, _Filter);
         visitor.TraverseDecl(Context.getTranslationUnitDecl());
+        
+        InitializerCheckerVisitor initializerCheckerVisitor(Context, _Debug);
+        initializerCheckerVisitor.TraverseDecl(Context.getTranslationUnitDecl());
     }
     
 private:

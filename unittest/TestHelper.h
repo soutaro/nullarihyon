@@ -77,6 +77,8 @@ public:
         return decl;
     }
     
+    ObjCInterfaceDecl *getInterfaceDecl(std::string name);
+    ObjCImplementationDecl *getImplementationDecl(std::string name);
     
     ObjCMethodDecl *getMethodDecl(std::string name = "test_method");
     

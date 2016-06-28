@@ -74,3 +74,31 @@ ObjCMethodDecl *ASTBuilder::getMethodDecl(std::string name) {
     
     return decl;
 }
+
+ObjCInterfaceDecl *ASTBuilder::getInterfaceDecl(std::string name) {
+    TranslationUnitDecl *translationUnit = _ASTUnit->getASTContext().getTranslationUnitDecl();
+    for (auto d : translationUnit->decls()) {
+        auto interface = llvm::dyn_cast<ObjCInterfaceDecl>(d);
+        if (interface) {
+            if (interface->getNameAsString() == name) {
+                return interface;
+            }
+        }
+    }
+    
+    return nullptr;
+}
+
+ObjCImplementationDecl *ASTBuilder::getImplementationDecl(std::string name) {
+    TranslationUnitDecl *translationUnit = _ASTUnit->getASTContext().getTranslationUnitDecl();
+    for (auto d : translationUnit->decls()) {
+        auto impl = llvm::dyn_cast<ObjCImplementationDecl>(d);
+        if (impl) {
+            if (impl->getNameAsString() == name) {
+                return impl;
+            }
+        }
+    }
+    
+    return nullptr;
+}
