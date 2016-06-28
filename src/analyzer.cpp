@@ -142,30 +142,35 @@ private:
 class InitializerCheckerVisitor : public RecursiveASTVisitor<InitializerCheckerVisitor> {
     ASTContext &_ASTContext;
     bool _Debug;
+    std::vector<std::string> &_Filter;
+    
 public:
-    InitializerCheckerVisitor(ASTContext &astContext, bool debug) : _ASTContext(astContext), _Debug(debug) {}
+    InitializerCheckerVisitor(ASTContext &astContext, bool debug, std::vector<std::string> &filter) : _ASTContext(astContext), _Debug(debug), _Filter(filter) {}
     
     bool TraverseObjCImplementationDecl(ObjCImplementationDecl *decl) {
         InitializerChecker checker(_ASTContext, decl);
         
-        for (auto methodDecl : decl->methods()) {
-            auto uninitializedVars = checker.check(methodDecl);
-            
-            if (!uninitializedVars.empty()) {
-                std::stringstream names;
-                bool first = true;
-                for (auto info : uninitializedVars) {
-                    if (first) {
-                        first = false;
-                    } else {
-                        names << ", ";
-                    }
-                    names << info->getIvarDecl()->getNameAsString();
-                }
+        std::string className = decl->getNameAsString();
+        if (_Filter.empty() || std::find(_Filter.begin(), _Filter.end(), className) != _Filter.end()) {
+            for (auto methodDecl : decl->methods()) {
+                auto uninitializedVars = checker.check(methodDecl);
                 
-                DiagnosticsEngine &engine = _ASTContext.getDiagnostics();
-                unsigned id = engine.getCustomDiagID(DiagnosticsEngine::Warning, "Nonnull ivar should be initialized: %0");
-                engine.Report(methodDecl->getLocation(), id) << names.str();
+                if (!uninitializedVars.empty()) {
+                    std::stringstream names;
+                    bool first = true;
+                    for (auto info : uninitializedVars) {
+                        if (first) {
+                            first = false;
+                        } else {
+                            names << ", ";
+                        }
+                        names << info->getIvarDecl()->getNameAsString();
+                    }
+                    
+                    DiagnosticsEngine &engine = _ASTContext.getDiagnostics();
+                    unsigned id = engine.getCustomDiagID(DiagnosticsEngine::Warning, "Nonnull ivar should be initialized: %0");
+                    engine.Report(methodDecl->getLocation(), id) << names.str();
+                }
             }
         }
         
@@ -182,7 +187,7 @@ public:
         NullCheckVisitor visitor(Context, _Debug, _Filter);
         visitor.TraverseDecl(Context.getTranslationUnitDecl());
         
-        InitializerCheckerVisitor initializerCheckerVisitor(Context, _Debug);
+        InitializerCheckerVisitor initializerCheckerVisitor(Context, _Debug, _Filter);
         initializerCheckerVisitor.TraverseDecl(Context.getTranslationUnitDecl());
     }
     
