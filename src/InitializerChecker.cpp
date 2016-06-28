@@ -78,6 +78,30 @@ public:
         return true;
     }
     
+    bool TraverseIfStmt(IfStmt *ifstmt) {
+        auto cond = ifstmt->getCond();
+        TraverseStmt(cond);
+        
+        auto condVar = llvm::dyn_cast<DeclRefExpr>(cond->IgnoreParenImpCasts());
+        if (condVar && condVar->getDecl()->getNameAsString() == "self" && !ifstmt->getElse()) {
+            // if (self) {
+            //   // do some initialization
+            // }
+            // is commonly used pattern in Objective C.
+            TraverseStmt(ifstmt->getThen());
+        } else {
+            processBranch(ifstmt->getThen(), ifstmt->getElse());
+        }
+        
+        return true;
+    }
+    
+    bool TraverseConditionalOperator(ConditionalOperator *cond) {
+        TraverseStmt(cond->getCond());
+        processBranch(cond->getTrueExpr(), cond->getFalseExpr());
+        return true;
+    }
+    
     bool VisitBinAssign(BinaryOperator *expr) {
         ObjCIvarRefExpr *ivarRef = llvm::dyn_cast<ObjCIvarRefExpr>(expr->getLHS()->IgnoreParenImpCasts());
         if (ivarRef) {
@@ -88,6 +112,33 @@ public:
             }
         }
         return true;
+    }
+    
+    set<shared_ptr<IvarInfo>> &getNonnullIvars() {
+        return _NonnullIvars;
+    }
+    
+    void processBranch(Stmt *branch1, Stmt *branch2) {
+        set<shared_ptr<IvarInfo>> branchVars1 = _NonnullIvars;
+        auto branchChecker1 = InitializerCheckerImpl(_ASTContext, branchVars1);
+        if (branch1) {
+            branchChecker1.TraverseStmt(branch1);
+        }
+        
+        set<shared_ptr<IvarInfo>> branchVars2 = _NonnullIvars;
+        auto branchChecker2 = InitializerCheckerImpl(_ASTContext, branchVars2);
+        if (branch2) {
+            branchChecker2.TraverseStmt(branch2);
+        }
+        
+        set<shared_ptr<IvarInfo>> postVars;
+        set_union(branchVars1.begin(), branchVars1.end(), branchVars2.begin(), branchVars2.end(), inserter(postVars, postVars.end()));
+        
+        set<shared_ptr<IvarInfo>> intersection;
+        set_intersection(postVars.begin(), postVars.end(), _NonnullIvars.begin(), _NonnullIvars.end(), inserter(intersection, intersection.end()));
+        
+        _NonnullIvars.clear();
+        _NonnullIvars.insert(intersection.begin(), intersection.end());
     }
 };
 
