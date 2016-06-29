@@ -50,10 +50,12 @@ bool isInitializerMethod(clang::ObjCMethodDecl *methodDecl) {
 
 class InitializerCheckerImpl : public RecursiveASTVisitor<InitializerCheckerImpl> {
     clang::ASTContext &_ASTContext;
+    ObjCMethodDecl *_MethodDecl;
     set<shared_ptr<IvarInfo>> &_NonnullIvars;
+    
 public:
-    InitializerCheckerImpl(clang::ASTContext &astContext, set<shared_ptr<IvarInfo>> &nonnullIvars)
-    : _ASTContext(astContext), _NonnullIvars(nonnullIvars) {}
+    InitializerCheckerImpl(clang::ASTContext &astContext, ObjCMethodDecl *methodDecl, set<shared_ptr<IvarInfo>> &nonnullIvars)
+    : _ASTContext(astContext), _MethodDecl(methodDecl), _NonnullIvars(nonnullIvars) {}
     
     bool VisitObjCMessageExpr(ObjCMessageExpr *messageExpr) {
         ObjCMethodDecl *decl = messageExpr->getMethodDecl();
@@ -68,7 +70,7 @@ public:
                 auto varRef = llvm::dyn_cast<DeclRefExpr>(receiver->IgnoreParenImpCasts());
                 
                 if (varRef) {
-                    if (varRef->getDecl()->getNameAsString() == "self") {
+                    if (varRef->getDecl()->getNameAsString() == "self" && decl->getClassInterface() == _MethodDecl->getClassInterface()) {
                         _NonnullIvars.clear();
                     }
                 }
@@ -120,13 +122,13 @@ public:
     
     void processBranch(Stmt *branch1, Stmt *branch2) {
         set<shared_ptr<IvarInfo>> branchVars1 = _NonnullIvars;
-        auto branchChecker1 = InitializerCheckerImpl(_ASTContext, branchVars1);
+        auto branchChecker1 = InitializerCheckerImpl(_ASTContext, _MethodDecl, branchVars1);
         if (branch1) {
             branchChecker1.TraverseStmt(branch1);
         }
         
         set<shared_ptr<IvarInfo>> branchVars2 = _NonnullIvars;
-        auto branchChecker2 = InitializerCheckerImpl(_ASTContext, branchVars2);
+        auto branchChecker2 = InitializerCheckerImpl(_ASTContext, _MethodDecl, branchVars2);
         if (branch2) {
             branchChecker2.TraverseStmt(branch2);
         }
@@ -184,7 +186,7 @@ set<shared_ptr<IvarInfo>> InitializerChecker::check(clang::ObjCMethodDecl *metho
     
     auto nonnullIvars = _NonnullIvars;
     
-    InitializerCheckerImpl impl(_ASTContext, nonnullIvars);
+    InitializerCheckerImpl impl(_ASTContext, methodDecl, nonnullIvars);
     impl.TraverseStmt(methodDecl->getBody());
     
     return nonnullIvars;
