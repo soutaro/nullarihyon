@@ -231,6 +231,26 @@ The nullability modification works only with variable reference.
 Take a look at [wiki page](https://github.com/soutaro/nullarihyon/wiki/Rules) to see the rules of Nullarihyon.
 It has some assumptions to minimize number of trivial false positives.
 
+## Experimental Initializer Checking
+
+As of 1.6, Nullarihyon can check if initializers assign all nonnull instance variables.
+This is experimental and totally optional.
+
+Add `__attribute__((annotate("nlh_initializer")))` attribute to method you want Nullarihyon to check.
+
+```objc
+- (instancetype)init __attribute__((annotate("nlh_initializer"))) {
+  ...
+}
+```
+
+In `nlh_initializer` methods, 
+
+* You have to assign all nonnull instance variables/properties, or
+* You have to call other `nlh_initializer` methods
+
+This check would prevent you from leaving nonnull instance variables and properties `nil`.
+
 # Limitation
 
 * It does not support per-file build setting in Xcode
