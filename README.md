@@ -251,6 +251,11 @@ In `nlh_initializer` methods,
 
 This check would prevent you from leaving nonnull instance variables and properties `nil`.
 
+## super
+
+Checking if `super` is initialized correctly is out of scope of Nullarihyon.
+You are responsible to call call initialization method of super classes correctly.
+
 # Limitation
 
 * It does not support per-file build setting in Xcode
