@@ -454,7 +454,7 @@ TEST(ExpressionNullabilityCalculator, selector) {
                        "@end\n"
                        "@implementation Test\n"
                        "- (void)hello {\n"
-                       "  id testee = @selector(hello);"
+                       "  SEL testee = @selector(hello);"
                        "}\n"
                        "@end\n");
     
@@ -471,6 +471,7 @@ TEST(ExpressionNullabilityCalculator, new) {
                        "+ (instancetype)new;"
                        "@end\n"
                        "@implementation Test\n"
+                       "+ (instancetype)new { return [[Test alloc] init]; }\n"
                        "- (void)hello {\n"
                        "  id testee = [Test new];"
                        "}\n"
@@ -561,8 +562,8 @@ TEST(isPointerType, pointer_to_ObjcObject) {
                        "@end\n"
                        "@implementation Test\n"
                        "- (void)hello {\n"
-                       "  NSObject **x;\n"
-                       "  id testee = x;"
+                       "  NSObject * __autoreleasing *x;\n"
+                       "  NSObject * __autoreleasing *testee = x;"
                        "}\n"
                        "@end\n");
     
