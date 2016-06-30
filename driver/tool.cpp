@@ -42,7 +42,19 @@ int main(int argc, const char **argv) {
     
     auto action = new NullCheckAction;
     action->setDebug(DebugOption);
-    action->setFilter(FilterOption);
+    
+    for (auto f : FilterOption) {
+        if (*f.begin() == '/' && *(f.end()-1) == '/') {
+            f.erase(f.begin());
+            f.erase(f.end()-1);
+            
+            std::shared_ptr<RegexpFilteringClause> clause{ new RegexpFilteringClause(std::regex(f)) };
+            action->addFilterClause(clause);
+        } else {
+            std::shared_ptr<TextFilteringClause> clause{ new TextFilteringClause(f) };
+            action->addFilterClause(clause);
+        }
+    }
     
     NullCheckActionFactory *factory = new NullCheckActionFactory(action);
     

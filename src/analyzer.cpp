@@ -85,7 +85,7 @@ QualType NullabilityCheckContext::getReturnType() const {
 
 class NullCheckVisitor : public RecursiveASTVisitor<NullCheckVisitor> {
 public:
-    NullCheckVisitor(ASTContext &context, bool debug, std::vector<std::string> &filter) : _ASTContext(context), _Debug(debug), _Filter(filter) {}
+    NullCheckVisitor(ASTContext &context, bool debug, Filter &filter) : _ASTContext(context), _Debug(debug), _Filter(filter) {}
 
     bool VisitDecl(Decl *decl) {
         ObjCMethodDecl *methodDecl = llvm::dyn_cast<ObjCMethodDecl>(decl);
@@ -136,22 +136,22 @@ public:
 private:
     ASTContext &_ASTContext;
     bool _Debug;
-    std::vector<std::string> &_Filter;
+    Filter &_Filter;
 };
 
 class InitializerCheckerVisitor : public RecursiveASTVisitor<InitializerCheckerVisitor> {
     ASTContext &_ASTContext;
     bool _Debug;
-    std::vector<std::string> &_Filter;
+    Filter &_Filter;
     
 public:
-    InitializerCheckerVisitor(ASTContext &astContext, bool debug, std::vector<std::string> &filter) : _ASTContext(astContext), _Debug(debug), _Filter(filter) {}
+    InitializerCheckerVisitor(ASTContext &astContext, bool debug, Filter &filter) : _ASTContext(astContext), _Debug(debug), _Filter(filter) {}
     
     bool TraverseObjCImplementationDecl(ObjCImplementationDecl *decl) {
         InitializerChecker checker(_ASTContext, decl);
         
-        std::string className = decl->getNameAsString();
-        if (_Filter.empty() || std::find(_Filter.begin(), _Filter.end(), className) != _Filter.end()) {
+        std::set<std::string> subject{ decl->getNameAsString() };
+        if (_Filter.testClassName(subject)) {
             for (auto methodDecl : decl->methods()) {
                 auto uninitializedVars = checker.check(methodDecl);
                 
@@ -180,7 +180,7 @@ public:
 
 class NullCheckConsumer : public ASTConsumer {
 public:
-    explicit NullCheckConsumer(bool debug, std::vector<std::string> &filter) : ASTConsumer(), _Debug(debug), _Filter(filter) {
+    explicit NullCheckConsumer(bool debug, Filter &filter) : ASTConsumer(), _Debug(debug), _Filter(filter) {
     }
     
     virtual void HandleTranslationUnit(clang::ASTContext &Context) {
@@ -193,11 +193,11 @@ public:
     
 private:
     bool _Debug;
-    std::vector<std::string> &_Filter;
+    Filter &_Filter;
 };
 
 std::unique_ptr<clang::ASTConsumer> NullCheckAction::CreateASTConsumer(CompilerInstance &Compiler, StringRef InFile) {
-    return std::unique_ptr<ASTConsumer>(new NullCheckConsumer(Debug, Filter));
+    return std::unique_ptr<ASTConsumer>(new NullCheckConsumer(Debug, _Filter));
 }
 
 

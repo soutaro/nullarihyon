@@ -10,6 +10,7 @@
 #include <clang/AST/RecursiveASTVisitor.h>
 
 #include "ExpressionNullabilityCalculator.h"
+#include "FilteringClause.h"
 
 using namespace clang;
 
@@ -55,7 +56,7 @@ protected:
     NullabilityCheckContext &_CheckContext;
     ExpressionNullabilityCalculator &_NullabilityCalculator;
     std::shared_ptr<VariableNullabilityEnvironment> _VarEnv;
-    std::vector<std::string> &_Filter;
+    Filter &_Filter;
     
     DiagnosticBuilder WarningReport(SourceLocation location, std::set<std::string> &subjects);
     DiagnosticBuilder WarningReport(SourceLocation location, std::set<const clang::ObjCContainerDecl *> &subjects);
@@ -65,7 +66,7 @@ public:
                                NullabilityCheckContext &checkContext,
                                ExpressionNullabilityCalculator &nullabilityCalculator,
                                std::shared_ptr<VariableNullabilityEnvironment> &env,
-                               std::vector<std::string> &filter)
+                               Filter &filter)
     : _ASTContext(astContext), _CheckContext(checkContext), _NullabilityCalculator(nullabilityCalculator), _VarEnv(env), _Filter(filter) {}
     virtual ~MethodBodyChecker() {}
 
@@ -97,7 +98,7 @@ public:
                              NullabilityCheckContext &checkContext,
                              ExpressionNullabilityCalculator &nullabilityCalculator,
                              std::shared_ptr<VariableNullabilityEnvironment> &env,
-                             std::vector<std::string> &filter)
+                             Filter &filter)
     : MethodBodyChecker(astContext, checkContext, nullabilityCalculator, env, filter) {}
 
     virtual bool TraverseBinLAnd(BinaryOperator *land);
@@ -109,19 +110,19 @@ class NullCheckAction : public clang::ASTFrontendAction {
 public:
     virtual std::unique_ptr<clang::ASTConsumer> CreateASTConsumer(clang::CompilerInstance &Compiler, clang::StringRef InFile);
     
-    explicit NullCheckAction() : clang::ASTFrontendAction(), Debug(false), Filter(std::vector<std::string>()) {}
+    explicit NullCheckAction() : clang::ASTFrontendAction(), Debug(false), _Filter(Filter()) {}
     
     void setDebug(bool debug) {
         Debug = debug;
     }
     
-    void setFilter(std::vector<std::string> &filter) {
-        Filter = filter;
+    void addFilterClause(std::shared_ptr<FilteringClause> clause) {
+        _Filter.addClause(clause);
     }
     
 private:
     bool Debug;
-    std::vector<std::string> Filter;
+    Filter _Filter;
 };
 
 #endif

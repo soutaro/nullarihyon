@@ -15,15 +15,10 @@ DiagnosticBuilder MethodBodyChecker::WarningReport(SourceLocation location, std:
     DiagnosticsEngine &diagEngine = _ASTContext.getDiagnostics();
     DiagnosticsEngine::Level level;
     
-    if (!_Filter.empty() && !subjects.empty()) {
-        level = DiagnosticsEngine::Ignored;
-        for (auto it : _Filter) {
-            if (subjects.find(it) != subjects.end()) {
-                level = DiagnosticsEngine::Warning;
-            }
-        }
-    } else {
+    if (_Filter.testClassName(subjects)) {
         level = DiagnosticsEngine::Warning;
+    } else {
+        level = DiagnosticsEngine::Ignored;
     }
     
     unsigned diagID = diagEngine.getCustomDiagID(level, "%0");
