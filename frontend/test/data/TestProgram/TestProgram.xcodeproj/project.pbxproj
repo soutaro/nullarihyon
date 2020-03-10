@@ -279,7 +279,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "/usr/bin/ruby -I ../../../lib:../../../bundle ../../../bin/frontend.rb xcode --analyzer=../../../../build/driver/Debug/nullarihyon-core --resource-dir=../../../../vendor/clang+llvm-3.8.0-x86_64-apple-darwin/lib/clang/3.8.0/";
+			shellScript = "ruby -I ../../../lib:../../../bundle ../../../bin/frontend.rb xcode --analyzer=../../../../build/driver/Debug/nullarihyon-core --resource-dir=../../../../vendor/clang+llvm-3.8.0-x86_64-apple-darwin/lib/clang/3.8.0/";
 		};
 		EA4578735016695D8B9B15B8 /* 📦 Check Pods Manifest.lock */ = {
 			isa = PBXShellScriptBuildPhase;
