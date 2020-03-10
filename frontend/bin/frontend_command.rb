@@ -17,4 +17,4 @@ end.parse!(ARGV)
 
 dir_path = Pathname(__dir__).realpath
 
-puts "/usr/bin/ruby -I#{dir_path.parent + "lib"}:#{dir_path.parent + "bundle"} #{dir_path + "frontend.rb"} xcode --analyzer=#{$analyzer_path} --resource-dir=#{$resource_dir_path}"
+puts "ruby -I#{dir_path.parent + "lib"}:#{dir_path.parent + "bundle"} #{dir_path + "frontend.rb"} xcode --analyzer=#{$analyzer_path} --resource-dir=#{$resource_dir_path}"

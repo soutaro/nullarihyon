@@ -128,4 +128,4 @@ ENDFOREACH(lib_path)
 # Generate nullarihyon command ruby script
 set (INSTALL_LIBEXEC_PREFIX ${CMAKE_INSTALL_PREFIX}/libexec/nullarihyon/${NULL_VERSION})
 set (INSTALL_LIB_PREFIX ${CMAKE_INSTALL_PREFIX}/lib/nullarihyon/${NULL_VERSION})
-install(CODE "execute_process(COMMAND /usr/bin/ruby ${PROJECT_SOURCE_DIR}/frontend/bin/make_frontend.rb ${CMAKE_INSTALL_PREFIX}/bin ${INSTALL_LIBEXEC_PREFIX}/nullarihyon-core ${INSTALL_LIB_PREFIX}/clang ${INSTALL_LIB_PREFIX}/frontend ${NULL_VERSION})")
+install(CODE "execute_process(COMMAND ruby ${PROJECT_SOURCE_DIR}/frontend/bin/make_frontend.rb ${CMAKE_INSTALL_PREFIX}/bin ${INSTALL_LIBEXEC_PREFIX}/nullarihyon-core ${INSTALL_LIB_PREFIX}/clang ${INSTALL_LIB_PREFIX}/frontend ${NULL_VERSION})")

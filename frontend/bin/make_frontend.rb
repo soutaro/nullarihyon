@@ -28,7 +28,6 @@ if ARGV.size == 5
 
   bin_path.open("w") do |io|
     io.puts <<EOS
-#!/usr/bin/ruby
 
 $ANALYZER_PATH = "#{analyzer_path}"
 $RESOURCE_DIR_PATH = "#{resource_dir_path}"
